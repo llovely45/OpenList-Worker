@@ -7,6 +7,10 @@ import {
   getStoreStatus,
 } from "../internal/model/db"
 import { getDriver } from "../internal/op/storage"
+import {
+  is115OpenDriverName,
+  repair115OpenStorage,
+} from "../internal/op/115open-repair"
 import { search } from "../internal/op/search"
 import { checkAdminAuth } from "../pkg/utils"
 import { safeErrorMessage } from "../pkg/errs"
@@ -461,6 +465,69 @@ adminRouter.post("/storage/disable", async (c) => {
     await saveDb(db, c.env)
   }
   return c.json({ code: 200, message: "success", data: null })
+})
+
+// POST /api/admin/driver/115open/repair
+// Canonicalize legacy persisted names and bump `modified` so an isolate cannot
+// reuse a Driver115 instance created before the 115 Open dispatcher fix.
+// This endpoint deliberately does not echo or rewrite `addition` (which holds
+// access_token / refresh_token) and does not call the remote 115 API.
+adminRouter.post("/driver/115open/repair", async (c) => {
+  try {
+    const db = await getDb(c.env)
+    const results: any[] = []
+    let matched = 0
+    let repaired = 0
+    let skipped = 0
+    const modified = new Date().toISOString()
+
+    for (const [index, storage] of (db.storages || []).entries()) {
+      if (!is115OpenDriverName(storage?.driver)) continue
+      matched++
+
+      if (storage.disabled) {
+        skipped++
+        results.push({
+          id: storage.id,
+          mount_path: storage.mount_path,
+          driver: storage.driver,
+          status: "skipped",
+          reason: "storage disabled",
+        })
+        continue
+      }
+
+      const repairedStorage = repair115OpenStorage(storage, modified)
+      db.storages[index] = repairedStorage
+      repaired++
+      results.push({
+        id: repairedStorage.id,
+        mount_path: repairedStorage.mount_path,
+        driver: repairedStorage.driver,
+        status: "repaired",
+      })
+    }
+
+    if (repaired > 0) await saveDb(db, c.env)
+
+    return c.json({
+      code: 200,
+      message:
+        repaired > 0
+          ? `115 Open storage repair applied: ${repaired}`
+          : "No enabled 115 Open storage needs repair",
+      data: { matched, repaired, skipped, results },
+    })
+  } catch (err: any) {
+    return c.json(
+      {
+        code: 500,
+        message: safeErrorMessage(err, "115 Open storage repair failed"),
+        data: null,
+      },
+      500,
+    )
+  }
 })
 
 adminRouter.get("/driver/names", (c) => {

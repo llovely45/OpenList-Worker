@@ -5,6 +5,7 @@ import type { StorageDriver } from "../driver/base"
 import {
   getItem,
   getOrCreateDriver,
+  resolve115DriverKind,
   scheduleStoragePersistence,
 } from "./storage"
 
@@ -54,6 +55,18 @@ test("Node persistence is awaited without waitUntil", async () => {
 
   await scheduleStoragePersistence(undefined, persistence)
   assert.equal(completed, true)
+})
+
+test("115OPEN selects the open-platform driver implementation", () => {
+  assert.equal(resolve115DriverKind("115OPEN"), "open")
+  assert.equal(resolve115DriverKind("115-Pan"), "open")
+})
+
+test("legacy and share 115 aliases do not enter the open-platform branch", () => {
+  assert.equal(resolve115DriverKind("115"), "legacy")
+  assert.equal(resolve115DriverKind("115Cloud"), "legacy")
+  assert.equal(resolve115DriverKind("115Netdisk"), "legacy")
+  assert.equal(resolve115DriverKind("115Share"), undefined)
 })
 
 test("mounted storage roots return without initializing the remote driver", async () => {

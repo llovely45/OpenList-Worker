@@ -1,0 +1,18 @@
+{
+  "id": "oplist-plugin-115-open-driver-repair",
+  "name": "115 开放平台驱动修复",
+  "version": "1.0.0",
+  "description": "将旧版 115 Open 存储规范化并刷新 Worker 驱动缓存。不会修改 access_token 或 refresh_token。",
+  "author": "OpenList Worker",
+  "homepage": "https://github.com/llovely45/OpenList-Worker",
+  "repository": "https://github.com/llovely45/OpenList-Worker",
+  "type": "tool",
+  "icon": "icon.svg",
+  "enabled": true,
+  "high_privilege": false,
+  "permissions": ["dom:inject", "storage:manage", "network:fetch"],
+  "tags": ["115", "Open Platform", "repair"],
+  "config_schema": [],
+  "config_values": {},
+  "target_hooks": ["global"]
+}

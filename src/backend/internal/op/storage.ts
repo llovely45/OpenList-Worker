@@ -157,11 +157,36 @@ function parseAddition(storageConfig?: any): any {
     : additionStr
 }
 
+export type Driver115Kind = "legacy" | "open"
+
+/**
+ * Keep legacy 115 aliases separate from the 115 Open Platform driver.
+ *
+ * The dispatch table historically contained overlapping `else if` branches,
+ * which made `115Open` reach Driver115 before Pan115Driver could handle it.
+ */
+export function resolve115DriverKind(
+  driverName: string,
+): Driver115Kind | undefined {
+  const normDriver = (driverName || "").toLowerCase().replace(/[^a-z0-9]/g, "")
+
+  if (normDriver === "115open" || normDriver === "115pan") return "open"
+  if (
+    normDriver === "115" ||
+    normDriver === "115cloud" ||
+    normDriver === "115netdisk"
+  ) {
+    return "legacy"
+  }
+  return undefined
+}
+
 async function createDriver(
   driverName: string,
   storageConfig?: any,
 ): Promise<StorageDriver> {
   const normDriver = (driverName || "").toLowerCase().replace(/[^a-z0-9]/g, "")
+  const driver115Kind = resolve115DriverKind(driverName)
   if (normDriver === "local") {
     // Only available in Node.js container — not in Cloudflare Workers
     if (typeof process !== "undefined" && process.release?.name === "node") {
@@ -263,12 +288,7 @@ async function createDriver(
   ) {
     driver = new QuarkDriver(parseAddition(storageConfig))
     await driver.init?.()
-  } else if (
-    normDriver === "115" ||
-    normDriver === "115cloud" ||
-    normDriver === "115open" ||
-    normDriver === "115netdisk"
-  ) {
+  } else if (driver115Kind === "legacy") {
     driver = new Driver115(parseAddition(storageConfig))
     await driver.init?.()
   } else if (
@@ -550,13 +570,7 @@ async function createDriver(
       }
     })
     await driver.init?.()
-  } else if (
-    normDriver === "115open" ||
-    normDriver === "115" ||
-    normDriver === "115pan" ||
-    normDriver === "115cloud" ||
-    normDriver.startsWith("115")
-  ) {
+  } else if (driver115Kind === "open") {
     const addition = parseAddition(storageConfig)
     driver = new Pan115Driver(addition, async (tokens) => {
       // 持久化刷新后的 access_token / refresh_token，避免冷启动重复刷新

@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: sync-upstream-main
@@ -25,6 +26,7 @@ jobs:
       - name: Merge upstream main
         env:
           UPSTREAM_REPOSITORY: https://github.com/OpenListTeam/OpenList-Worker.git
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -40,5 +42,8 @@ jobs:
             echo "Already up to date."
           else
             git push origin HEAD:main
+            # A push made with GITHUB_TOKEN does not start another workflow.
+            # Dispatch the production workflow explicitly after syncing.
+            gh workflow run deploy-worker.yml --ref main
             echo "Synced upstream updates to main."
           fi

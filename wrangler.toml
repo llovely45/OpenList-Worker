@@ -5,6 +5,17 @@ compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 preview_urls = false
 
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+invocation_logs = true
+persist = true
+
+[observability.traces]
+enabled = false
+head_sampling_rate = 1
+persist = true
+
 [assets]
 directory = "./dist"
 binding = "ASSETS"
@@ -37,5 +48,4 @@ id = "0ee1bdfa2c204097be4ffb695e94183e"
 # binding = "DB"
 # database_name = "openlist"
 # database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-
 

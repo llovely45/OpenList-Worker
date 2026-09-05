@@ -33,6 +33,36 @@ export interface SignPolicy {
   expiresIn: number
 }
 
+/**
+ * Attach an OpenList download signature to a raw URL.
+ *
+ * The frontend consumes `raw_url` directly in several preview/download
+ * components, while the API also exposes `sign` as a separate field. Keep
+ * this helper tolerant of both relative proxy URLs and absolute driver URLs.
+ */
+export function appendDownloadSign(rawUrl: string, sign: string): string {
+  if (!rawUrl || !sign) return rawUrl
+
+  try {
+    const url = new URL(rawUrl, "https://openlist.invalid")
+    url.searchParams.set("sign", sign)
+
+    // Keep relative URLs relative in API responses.
+    if (!/^[a-z][a-z\d+.-]*:/i.test(rawUrl) && !rawUrl.startsWith("//")) {
+      return `${url.pathname}${url.search}${url.hash}`
+    }
+    return url.toString()
+  } catch {
+    // URL parsing should not fail for normal URLs, but preserve a safe
+    // fallback for unusual driver-provided URL strings.
+    const hashIndex = rawUrl.indexOf("#")
+    const beforeHash = hashIndex >= 0 ? rawUrl.slice(0, hashIndex) : rawUrl
+    const hash = hashIndex >= 0 ? rawUrl.slice(hashIndex) : ""
+    const separator = beforeHash.includes("?") ? "&" : "?"
+    return `${beforeHash}${separator}sign=${encodeURIComponent(sign)}${hash}`
+  }
+}
+
 export async function getSignPolicy(c: any): Promise<SignPolicy> {
   try {
     const db = await getDb(c?.env)

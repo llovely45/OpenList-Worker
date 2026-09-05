@@ -605,6 +605,22 @@ export const defaultDb = {
       group: 10,
       flag: 0,
     },
+    {
+      key: "multipart_enabled",
+      value: "true",
+      type: "bool",
+      help: "Enable Multipart Upload",
+      group: 10,
+      flag: 1,
+    },
+    {
+      key: "multipart_chunk_size",
+      value: "10",
+      type: "number",
+      help: "Multipart Upload Chunk Size in MB",
+      group: 10,
+      flag: 1,
+    },
 
     // Group 14: OTHER (https://doc.oplist.org/configuration/other)
     // 115 / 123 / PikPak / Thunder Temp Directories

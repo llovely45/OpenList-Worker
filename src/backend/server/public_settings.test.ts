@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import { Hono } from "hono"
-import { saveDb } from "../internal/model/db"
+import { defaultDb, saveDb } from "../internal/model/db"
 import { publicRouter } from "./public"
 
 const env: any = {}
@@ -99,4 +99,37 @@ test("Security(F-14): keys the frontend actually reads are still echoed", async 
   assert.equal(json.data.share_icon, "/icon.png")
   assert.equal(json.data.ldap_login_tips, "use your corp account")
   assert.equal(json.data.sso_login_platform, "github")
+})
+
+test("Feature: Worker public settings enable multipart uploads by default", async () => {
+  await seed([])
+  const json = await fetchSettings()
+  assert.equal(json.data.multipart_enabled, "true")
+  assert.equal(json.data.multipart_chunk_size, "10")
+})
+
+test("Feature: persisted multipart settings are exposed to the frontend", async () => {
+  await seed([
+    { key: "multipart_enabled", value: "false" },
+    { key: "multipart_chunk_size", value: "20" },
+  ])
+  const json = await fetchSettings()
+  assert.equal(json.data.multipart_enabled, "false")
+  assert.equal(json.data.multipart_chunk_size, "20")
+})
+
+test("Feature: admin defaults expose multipart controls in traffic settings", () => {
+  const enabled = defaultDb.settings.find(
+    (setting) => setting.key === "multipart_enabled",
+  )
+  const chunkSize = defaultDb.settings.find(
+    (setting) => setting.key === "multipart_chunk_size",
+  )
+
+  assert.equal(enabled?.value, "true")
+  assert.equal(enabled?.type, "bool")
+  assert.equal(enabled?.group, 10)
+  assert.equal(chunkSize?.value, "10")
+  assert.equal(chunkSize?.type, "number")
+  assert.equal(chunkSize?.group, 10)
 })

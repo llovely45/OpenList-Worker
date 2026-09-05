@@ -72,6 +72,11 @@ publicRouter.get("/settings", async (c) => {
     ignore_direct_link_params: "",
     package_download: "true",
     offline_download: "true",
+    // --- Upload ---
+    // Keep multipart uploads enabled so the frontend can split files into
+    // requests that stay below the CDN/Worker request-body limit.
+    multipart_enabled: "true",
+    multipart_chunk_size: "10",
     ocr_api: "",
     privacy_regs: "",
 

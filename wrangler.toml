@@ -2,7 +2,7 @@ name = "openlist"
 main = "src/backend/worker.ts"
 compatibility_date = "2026-08-04"
 compatibility_flags = ["nodejs_compat"]
-workers_dev = false
+workers_dev = true
 preview_urls = false
 
 [assets]
@@ -26,6 +26,9 @@ VITE_API_URL = "/api"
 
 [[kv_namespaces]]
 binding = "OPENLIST_KV"
+# New clean database for the rebuilt Worker. The previous namespace remains
+# available as a backup: d090a33a1bbd4928b469a4dfd8eb5711
+id = "0ee1bdfa2c204097be4ffb695e94183e"
 
 # 可选：使用 Cloudflare D1 作为持久化后端（设置 DB_DRIVER=d1）。
 # 将 database_id 替换为实际 D1 数据库 ID 后取消注释。
@@ -34,7 +37,5 @@ binding = "OPENLIST_KV"
 # binding = "DB"
 # database_name = "openlist"
 # database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-
-
 
 

@@ -20,17 +20,18 @@ const emptyNodeDriverPlugin = {
       return { path: args.path, namespace: "empty-node-driver" }
     })
     // 拦截直接引用 ssh2 / cpu-features / iconv-lite / mysql2
-    build.onResolve({ filter: /^(ssh2|cpu-features|iconv-lite)(\/.*)?$/ }, (args) => {
-      return { path: args.path, namespace: "empty-node-driver" }
-    })
+    build.onResolve(
+      { filter: /^(ssh2|cpu-features|iconv-lite)(\/.*)?$/ },
+      (args) => {
+        return { path: args.path, namespace: "empty-node-driver" }
+      },
+    )
     build.onResolve({ filter: /^mysql2(\/.*)?$/ }, (args) => {
       return { path: args.path, namespace: "empty-node-driver" }
     })
-    build.onLoad(
-      { filter: /.*/, namespace: "empty-node-driver" },
-      () => {
-        return {
-          contents: `
+    build.onLoad({ filter: /.*/, namespace: "empty-node-driver" }, () => {
+      return {
+        contents: `
 // Empty stub for Edge/CloudFunction build — Node-only drivers (sftp/ftp/ssh2/mysql2) are not available in edge/serverless isolates.
 export const SFTPDriver = class { constructor() { throw new Error("[Edge/Serverless] SFTP driver requires full Node.js runtime"); } };
 export const normalizeSFTPAddition = (v) => v;
@@ -41,10 +42,9 @@ export const Client = class { constructor() { throw new Error("[Edge/Serverless]
 export const createPool = () => { throw new Error("[Edge/Serverless] mysql2 is not available in edge/serverless runtime"); };
 export default {};
 `,
-          loader: "js",
-        }
-      },
-    )
+        loader: "js",
+      }
+    })
   },
 }
 
@@ -53,12 +53,13 @@ async function build() {
     entryPoints: ["api/[...route].ts"],
     bundle: true,
     platform: "neutral",
+    mainFields: ["module", "main"],
     // 输出到 dist-server（dist 是 EdgeOne/Vercel 的静态发布目录，
     // 后端 bundle 不应作为静态资源被发布出去）
     outfile: "dist-server/api/[...route].js",
     minify: true,
     format: "esm",
-    external: ["ssh2", "cpu-features", "iconv-lite", "mysql2"],
+    external: ["ssh2", "cpu-features", "iconv-lite", "mysql2", "node:crypto"],
     loader: { ".node": "empty" },
     plugins: [emptyNodeDriverPlugin],
   })
@@ -83,10 +84,11 @@ async function build() {
       entryPoints: ["esa-entry.ts"],
       bundle: true,
       platform: "neutral",
+      mainFields: ["module", "main"],
       outfile: "dist/esa-entry.js",
       minify: true,
       format: "esm",
-      external: ["ssh2", "cpu-features", "iconv-lite", "mysql2"],
+      external: ["ssh2", "cpu-features", "iconv-lite", "mysql2", "node:crypto"],
       loader: { ".html": "text", ".node": "empty" },
       plugins: [emptyNodeDriverPlugin],
     })

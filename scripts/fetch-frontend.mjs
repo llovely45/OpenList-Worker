@@ -38,7 +38,30 @@ function run(cmd, opts = {}) {
 }
 
 function detectPackageManager(dir) {
-  return fs.existsSync(path.join(dir, "pnpm-lock.yaml")) ? "pnpm" : "npm"
+  const packageFile = path.join(dir, "package.json")
+  const packageJson = JSON.parse(fs.readFileSync(packageFile, "utf8"))
+  const declared = String(packageJson.packageManager || "")
+  const pnpmMatch = declared.match(/^pnpm@(\d+\.\d+\.\d+)$/)
+
+  if (pnpmMatch) {
+    const executable = `npx --yes pnpm@${pnpmMatch[1]}`
+    return {
+      install: `${executable} install --frozen-lockfile`,
+      run: (script) => `${executable} run ${script}`,
+    }
+  }
+
+  if (fs.existsSync(path.join(dir, "pnpm-lock.yaml"))) {
+    return {
+      install: "pnpm install --frozen-lockfile",
+      run: (script) => `pnpm run ${script}`,
+    }
+  }
+
+  return {
+    install: "npm install",
+    run: (script) => `npm run ${script}`,
+  }
 }
 
 function requireDist(src) {
@@ -140,9 +163,9 @@ function buildLocalRepo(repo) {
     throw new Error(`目录不是前端仓库: ${abs}`)
   }
   const pm = detectPackageManager(abs)
-  run(`${pm} install`, { cwd: abs })
+  run(pm.install, { cwd: abs })
   prepareI18n(abs)
-  run(`${pm} run build`, { cwd: abs })
+  run(pm.run("build"), { cwd: abs })
   replaceDist(path.join(abs, "dist"))
 }
 
@@ -181,9 +204,9 @@ function main() {
       `git clone --depth 1 --branch ${OFFICIAL_REPO_REF} ${OFFICIAL_REPO_URL} ${tmp}`,
     )
     const pm = detectPackageManager(tmp)
-    run(`${pm} install`, { cwd: tmp })
+    run(pm.install, { cwd: tmp })
     prepareI18n(tmp)
-    run(`${pm} run build`, { cwd: tmp })
+    run(pm.run("build"), { cwd: tmp })
     replaceDist(path.join(tmp, "dist"))
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true })

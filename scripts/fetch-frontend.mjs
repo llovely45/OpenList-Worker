@@ -16,7 +16,7 @@
  *   node scripts/fetch-frontend.mjs
  */
 
-import { execSync } from "node:child_process"
+import { execFileSync, execSync } from "node:child_process"
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
@@ -47,6 +47,85 @@ function requireDist(src) {
   }
 }
 
+function hasTranslatedLocales(repo) {
+  const langDir = path.join(repo, "src", "lang")
+  if (!fs.existsSync(langDir)) return false
+  return fs.readdirSync(langDir, { withFileTypes: true }).some((entry) => {
+    return (
+      entry.isDirectory() &&
+      entry.name.toLowerCase() !== "en" &&
+      fs.existsSync(path.join(langDir, entry.name, "index.json"))
+    )
+  })
+}
+
+/**
+ * The official frontend main branch keeps only the English source dictionary.
+ * Published builds ship the translated dictionaries separately as i18n.tar.gz.
+ * Fetch that archive before Vite builds so the language switcher includes zh-CN.
+ */
+function prepareI18n(repo) {
+  if (hasTranslatedLocales(repo)) {
+    console.log("  检测到前端已有翻译语言包")
+    run("node ./scripts/i18n.mjs", { cwd: repo })
+    return
+  }
+
+  const packageFile = path.join(repo, "package.json")
+  const packageJson = JSON.parse(fs.readFileSync(packageFile, "utf8"))
+  const version = String(packageJson.version || "").trim()
+  const versionSegment = encodeURIComponent(version)
+  const urls = [
+    `https://github.com/OpenListTeam/OpenList-Frontend/releases/download/v${versionSegment}/i18n.tar.gz`,
+    "https://github.com/OpenListTeam/OpenList-Frontend/releases/latest/download/i18n.tar.gz",
+  ]
+  const archiveDir = fs.mkdtempSync(path.join(os.tmpdir(), "openlist-i18n-"))
+  const archive = path.join(archiveDir, "i18n.tar.gz")
+
+  try {
+    const downloaded = urls.some((url) => {
+      try {
+        execFileSync(
+          "curl",
+          [
+            "--fail",
+            "--silent",
+            "--show-error",
+            "--location",
+            "--retry",
+            "3",
+            "--connect-timeout",
+            "10",
+            "--max-time",
+            "120",
+            "--output",
+            archive,
+            url,
+          ],
+          { stdio: "ignore" },
+        )
+        return true
+      } catch {
+        return false
+      }
+    })
+
+    if (!downloaded) {
+      throw new Error(
+        `无法获取官方前端翻译包（版本 ${version || "unknown"}）。为避免重新部署成纯英文，已停止构建。`,
+      )
+    }
+
+    const langDir = path.join(repo, "src", "lang")
+    fs.mkdirSync(langDir, { recursive: true })
+    execFileSync("tar", ["-xzf", archive, "-C", langDir], { stdio: "ignore" })
+    run("node ./scripts/i18n.mjs", { cwd: repo })
+    console.log("✓ 官方翻译语言包已就绪")
+  } finally {
+    fs.rmSync(archiveDir, { recursive: true, force: true })
+  }
+}
+
 function replaceDist(src) {
   console.log(`  复制前端产物: ${src} -> ${DEST}`)
   fs.rmSync(DEST, { recursive: true, force: true })
@@ -62,6 +141,7 @@ function buildLocalRepo(repo) {
   }
   const pm = detectPackageManager(abs)
   run(`${pm} install`, { cwd: abs })
+  prepareI18n(abs)
   run(`${pm} run build`, { cwd: abs })
   replaceDist(path.join(abs, "dist"))
 }
@@ -102,6 +182,7 @@ function main() {
     )
     const pm = detectPackageManager(tmp)
     run(`${pm} install`, { cwd: tmp })
+    prepareI18n(tmp)
     run(`${pm} run build`, { cwd: tmp })
     replaceDist(path.join(tmp, "dist"))
   } finally {

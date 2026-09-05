@@ -15,7 +15,11 @@ import { resolveShare } from "../internal/op/share"
 import { resolvePath } from "../internal/model/db"
 import { getUserFromContext } from "./middlewares"
 import { canWrite, getActualPath, isAdmin } from "../pkg/permission"
-import { getSignPolicy, signDownloadPath } from "../pkg/sign"
+import {
+  appendDownloadSign,
+  getSignPolicy,
+  signDownloadPath,
+} from "../pkg/sign"
 import { safeErrorMessage } from "../pkg/errs"
 import { search } from "../internal/op/search"
 import { parseZip, extractZipEntry, ZipArchive } from "../internal/archive/zip"
@@ -458,6 +462,10 @@ fsRouter.post("/get", async (c) => {
       !item.is_dir && signPolicy.enabled
         ? await signDownloadPath(c, reqPath, signPolicy.expiresIn)
         : item.sign || ""
+    const rawUrlWithSign =
+      !item.is_dir && signPolicy.enabled
+        ? appendDownloadSign(rawUrl, sign)
+        : rawUrl
     return c.json({
       code: 200,
       message: "success",
@@ -471,7 +479,7 @@ fsRouter.post("/get", async (c) => {
         sign,
         thumb: (item as any).thumb || "",
         type: item.type ?? 0,
-        raw_url: rawUrl,
+        raw_url: rawUrlWithSign,
         readme: "",
         header: "",
         provider,
@@ -1161,10 +1169,15 @@ fsRouter.post("/link", async (c) => {
       )
     }
     // 无直链（如本地/加密驱动）：返回代理下载地址
+    const rawUrl = `/api/p${reqPath.startsWith("/") ? "" : "/"}${reqPath}`
+    const signPolicy = await getSignPolicy(c)
+    const sign = signPolicy.enabled
+      ? await signDownloadPath(c, reqPath, signPolicy.expiresIn)
+      : ""
     return c.json({
       code: 200,
       message: "success",
-      data: { url: `/api/p${reqPath.startsWith("/") ? "" : "/"}${reqPath}` },
+      data: { url: appendDownloadSign(rawUrl, sign) },
     })
   } catch (e: any) {
     return c.json({ code: 500, message: safeErrorMessage(e), data: null }, 500)

@@ -47,6 +47,7 @@ function detectPackageManager(dir) {
     const executable = `npx --yes pnpm@${pnpmMatch[1]}`
     return {
       install: `${executable} install --frozen-lockfile`,
+      retryInstall: `${executable} install --frozen-lockfile --trust-lockfile`,
       run: (script) => `${executable} run ${script}`,
     }
   }
@@ -54,6 +55,7 @@ function detectPackageManager(dir) {
   if (fs.existsSync(path.join(dir, "pnpm-lock.yaml"))) {
     return {
       install: "pnpm install --frozen-lockfile",
+      retryInstall: "pnpm install --frozen-lockfile --trust-lockfile",
       run: (script) => `pnpm run ${script}`,
     }
   }
@@ -61,6 +63,30 @@ function detectPackageManager(dir) {
   return {
     install: "npm install",
     run: (script) => `npm run ${script}`,
+  }
+}
+
+/**
+ * 目标仓库锁定了独立的 pnpm 版本（packageManager 字段，如前端仓库 pnpm@11.24.0），
+ * 用 npx 按精确版本执行。
+ *
+ * 不走 corepack：旧版 Node（如 EdgeOne 构建环境的 22.11.0）自带的 corepack
+ * 内置 npm 签名密钥已过期（2025-04 registry 密钥轮换），`corepack pnpm` 会报
+ * "Cannot find matching keyid" 直接失败；npx 只经 npm 下载，无此问题。
+ */
+function installDependencies(pm, cwd) {
+  try {
+    run(pm.install, { cwd })
+  } catch (error) {
+    if (!pm.retryInstall) throw error
+    // 重试一次并加 --trust-lockfile：pnpm 11 默认对 lockfile 逐项重跑
+    // minimumReleaseAge / trustPolicy 供应链复核，registry manifest 缺少
+    // 平台子包时会误报（如 @crowdin/cli-*-arm64）。lockfile 来自刚克隆的
+    // 官方前端仓库（HTTPS + 官方分支），属于可信来源，跳过复核安全。
+    console.warn(
+      "  [fetch-frontend] pnpm install 失败（lockfile 供应链复核或网络问题），--trust-lockfile 重试一次...",
+    )
+    run(pm.retryInstall, { cwd })
   }
 }
 
@@ -163,7 +189,7 @@ function buildLocalRepo(repo) {
     throw new Error(`目录不是前端仓库: ${abs}`)
   }
   const pm = detectPackageManager(abs)
-  run(pm.install, { cwd: abs })
+  installDependencies(pm, abs)
   prepareI18n(abs)
   run(pm.run("build"), { cwd: abs })
   replaceDist(path.join(abs, "dist"))
@@ -201,13 +227,12 @@ function main() {
   console.log(`  克隆官方前端: ${OFFICIAL_REPO_URL}#${OFFICIAL_REPO_REF}`)
   try {
     run(
-      `git clone --depth 1 --branch ${OFFICIAL_REPO_REF} ${OFFICIAL_REPO_URL} ${tmp}`,
+      // -c core.autocrlf=false：禁用克隆端的换行符转换。Windows 上 autocrlf
+      // 会把前端源码（含 index.html）检出为 CRLF，改变 vite 构建出的
+      // dist/index.html 内容，进而导致产物哈希跨平台不一致。
+      `git -c core.autocrlf=false clone --depth 1 --branch ${OFFICIAL_REPO_REF} ${OFFICIAL_REPO_URL} ${tmp}`,
     )
-    const pm = detectPackageManager(tmp)
-    run(pm.install, { cwd: tmp })
-    prepareI18n(tmp)
-    run(pm.run("build"), { cwd: tmp })
-    replaceDist(path.join(tmp, "dist"))
+    buildLocalRepo(tmp)
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true })
   }

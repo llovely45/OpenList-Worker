@@ -88,7 +88,7 @@ jobs:
           }
 
       - name: Deploy Worker
-        run: pnpm exec wrangler deploy --yes
+        run: pnpm exec wrangler deploy
 
       - name: Configure admin API token
         shell: bash

@@ -4,8 +4,8 @@ import { Hono } from "hono"
 import { saveDb } from "../internal/model/db"
 import { fsRouter } from "./fs"
 
-const env: any = {}
 const ADMIN_TOKEN = "ADMIN_STATIC_TOKEN"
+const env: any = { ADMIN_API_TOKEN: ADMIN_TOKEN }
 
 /**
  * `/fs/other` dispatches driver-specific privileged operations. S3 uses it to
@@ -16,7 +16,7 @@ const ADMIN_TOKEN = "ADMIN_STATIC_TOKEN"
 const seed = () =>
   saveDb(
     {
-      settings: [{ key: "token", value: ADMIN_TOKEN }],
+      settings: [{ key: "token", value: "115-provider-token" }],
       users: [
         {
           id: 1,
@@ -54,11 +54,15 @@ const seed = () =>
 const post = (headers: Record<string, string> = {}) => {
   const app = new Hono()
   app.route("/api/fs", fsRouter)
-  return app.request("/api/fs/other", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...headers },
-    body: JSON.stringify({ path: "/x", method: "direct_upload" }),
-  })
+  return app.request(
+    "/api/fs/other",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...headers },
+      body: JSON.stringify({ path: "/x", method: "direct_upload" }),
+    },
+    env,
+  )
 }
 
 test("Security(H-8): guest cannot reach /api/fs/other", async () => {

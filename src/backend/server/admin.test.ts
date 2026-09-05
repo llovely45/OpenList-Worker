@@ -6,7 +6,7 @@ import { getDb, saveDb } from "../internal/model/db"
 import { adminRouter } from "./admin"
 
 test("115 Open repair endpoint canonicalizes only enabled 115 Open storages", async () => {
-  const env: any = {}
+  const env: any = { ADMIN_API_TOKEN: "admin-token" }
   const addition = '{"access_token":"[REDACTED]","refresh_token":"[REDACTED]"}'
   await saveDb(
     {
@@ -71,4 +71,44 @@ test("115 Open repair endpoint canonicalizes only enabled 115 Open storages", as
   assert.equal(share.driver, "115Share")
   const disabled = db.storages.find((storage: any) => storage.id === 3)
   assert.equal(disabled.driver, "115Open")
+})
+
+test("admin API uses ADMIN_API_TOKEN and never reuses the 115 token setting", async () => {
+  const env: any = { ADMIN_API_TOKEN: "dedicated-admin-token" }
+  await saveDb(
+    {
+      settings: [{ key: "token", value: "115-provider-token" }],
+      users: [],
+      storages: [],
+      shares: [],
+    },
+    env,
+  )
+
+  const app = new Hono()
+  app.route("/api/admin", adminRouter)
+
+  const dedicatedTokenResponse = await app.request(
+    "/api/admin/driver/115open/repair",
+    {
+      method: "POST",
+      headers: { Authorization: "Bearer dedicated-admin-token" },
+    },
+    env,
+  )
+  assert.equal(dedicatedTokenResponse.status, 200)
+  const dedicatedBody: any = await dedicatedTokenResponse.json()
+  assert.equal(dedicatedBody.code, 200)
+
+  const providerTokenResponse = await app.request(
+    "/api/admin/driver/115open/repair",
+    {
+      method: "POST",
+      headers: { Authorization: "Bearer 115-provider-token" },
+    },
+    env,
+  )
+  assert.equal(providerTokenResponse.status, 200)
+  const body: any = await providerTokenResponse.json()
+  assert.equal(body.code, 401)
 })

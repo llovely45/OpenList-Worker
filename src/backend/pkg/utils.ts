@@ -24,7 +24,7 @@ export function formatBytes(bytes: number, decimals = 2): string {
 
 // Check administrator authorization from context
 export async function checkAdminAuth(c: Context): Promise<boolean> {
-  // 静态 API token（settings.token）
+  // 专用静态管理员 API token（Worker Secret: ADMIN_API_TOKEN）
   if (await isStaticApiToken(c)) return true
 
   const authHeader = c.req.header("Authorization")
@@ -52,7 +52,7 @@ export async function checkAdminAuth(c: Context): Promise<boolean> {
 }
 
 /**
- * 仅判断请求是否携带匹配的静态 API token（settings.token）。
+ * 仅判断请求是否携带匹配的专用静态管理员 API token。
  * 与 checkAdminAuth 不同：不含 JWT 判定，供身份解析（getUserFromContext）
  * 区分「静态 token 调用方」与「登录用户」，避免 JWT 管理员被误判为 api-token。
  */
@@ -62,11 +62,10 @@ export async function isStaticApiToken(c: Context): Promise<boolean> {
   const token = authHeader.startsWith("Bearer ")
     ? authHeader.substring(7)
     : authHeader
-  const db = await getDb(c.env)
-  const tokenSetting = db.settings.find((s: any) => s.key === "token")
-  if (!tokenSetting || !tokenSetting.value) return false
+  const configuredToken = c.env?.ADMIN_API_TOKEN
+  if (!configuredToken) return false
   const tokenBytes = new TextEncoder().encode(token)
-  const expectedBytes = new TextEncoder().encode(String(tokenSetting.value))
+  const expectedBytes = new TextEncoder().encode(String(configuredToken))
   if (tokenBytes.length !== expectedBytes.length) return false
   let match = 0
   for (let i = 0; i < tokenBytes.length; i++) {

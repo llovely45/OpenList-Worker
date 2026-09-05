@@ -18,7 +18,7 @@ import { safeErrorMessage } from "../pkg/errs"
 export const adminRouter = new Hono()
 
 adminRouter.use("*", async (c, next) => {
-  // 统一走 checkAdminAuth：静态 API token（settings.token）与 JWT 管理员
+  // 统一走 checkAdminAuth：专用 ADMIN_API_TOKEN 与 JWT 管理员
   // （role===2 且 DB 中存在未禁用用户）都视为管理员。
   const isAdmin = await checkAdminAuth(c)
   if (!isAdmin) {

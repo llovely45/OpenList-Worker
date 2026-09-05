@@ -90,6 +90,11 @@ jobs:
       - name: Deploy Worker
         run: pnpm exec wrangler deploy --yes
 
+      - name: Configure admin API token
+        shell: bash
+        run: |
+          printf '%s' "$OPENLIST_ADMIN_TOKEN" | pnpm exec wrangler secret put ADMIN_API_TOKEN
+
       - name: Verify Worker health
         shell: bash
         run: |

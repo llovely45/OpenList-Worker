@@ -264,7 +264,7 @@ export async function getUserFromContext(c: Context): Promise<{
   allow_ldap?: boolean
   otp_secret?: string
 } | null> {
-  // 仅静态 API token（settings.token）命中才视为匿名管理员；
+  // 仅专用 ADMIN_API_TOKEN 命中才视为匿名管理员；
   // JWT 管理员走下方正常解析，避免用户名被硬编码成 "api-token"。
   if (await isStaticApiToken(c)) {
     return {

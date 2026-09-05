@@ -20,6 +20,6 @@
 
 - `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_ACCOUNT_ID`
-- `OPENLIST_ADMIN_TOKEN`：OpenList 管理设置中的原始静态 API token，不要包含 `Bearer ` 前缀
+- `OPENLIST_ADMIN_TOKEN`：自行生成的随机管理员 API 密钥，不是 OpenList 登录密码，也不是 115 Token；不要包含 `Bearer ` 前缀。Action 会把它写入 Worker Secret `ADMIN_API_TOKEN`。
 
 可选 Actions Variable：`OPENLIST_BASE_URL`，默认值为 `https://alist.nmsl.best`。

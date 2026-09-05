@@ -5,8 +5,8 @@ import { getDb, saveDb } from "../internal/model/db"
 import { getOrInitUsers, hashPassword } from "./auth"
 import { userRouter } from "./user"
 
-const env: any = {}
 const ADMIN_TOKEN = "ADMIN_STATIC_TOKEN"
+const env: any = { ADMIN_API_TOKEN: ADMIN_TOKEN }
 
 const seed = (users: any[], settings: any[] = []) =>
   saveDb({ settings, users, storages: [], shares: [] }, env)
@@ -81,18 +81,22 @@ test("Security(F-11): user/create without a password gets a random one, not 1234
         "0000000000000000000000000000000000000000000000000000000000000000",
       ),
     ],
-    [{ key: "token", value: ADMIN_TOKEN }],
+    [{ key: "token", value: "115-provider-token" }],
   )
   const app = new Hono()
   app.route("/api/admin/user", userRouter)
-  const res = await app.request("/api/admin/user/create", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: ADMIN_TOKEN,
+  const res = await app.request(
+    "/api/admin/user/create",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: ADMIN_TOKEN,
+      },
+      body: JSON.stringify({ username: "newuser" }),
     },
-    body: JSON.stringify({ username: "newuser" }),
-  })
+    env,
+  )
   assert.equal(res.status, 200)
   const json: any = await res.json()
   assert.ok(

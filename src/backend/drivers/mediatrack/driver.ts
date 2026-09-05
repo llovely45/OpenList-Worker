@@ -10,12 +10,13 @@ import {
   MediatrackUploadResp,
 } from "./types"
 import { MediatrackApiClient } from "./util"
+import { createWorkerCache } from "../../pkg/bounded-cache"
 
 export class MediatrackDriver implements StorageDriver {
   private addition: MediatrackAddition
   private client: MediatrackApiClient
   private rootId: string = ""
-  private idCache: Map<string, string> = new Map()
+  private idCache = createWorkerCache<string, string>()
 
   constructor(addition: MediatrackAddition) {
     this.addition = addition

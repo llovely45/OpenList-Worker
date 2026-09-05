@@ -5,13 +5,14 @@ import {
 } from "../../internal/driver/base"
 import { DriverQuarkUcTvAddition, QuarkTvFile } from "./types"
 import { ClientQuarkUcTv } from "./util"
+import { createWorkerCache } from "../../pkg/bounded-cache"
 
 const DEFAULT_ROOT = "0"
 
 /** 只读驱动：仅 list + get（下载） */
 export class DriverQuarkUcTv implements StorageDriver {
   private client: ClientQuarkUcTv
-  private pathCache = new Map<string, string>()
+  private pathCache = createWorkerCache<string, string>()
 
   constructor(addition: DriverQuarkUcTvAddition) {
     this.client = new ClientQuarkUcTv(addition)

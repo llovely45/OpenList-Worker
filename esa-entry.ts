@@ -18,6 +18,7 @@
 declare const EdgeKV: any
 import app, { setSpaFallbackHtml } from "./src/backend/index"
 import INDEX_HTML from "./dist/index.html"
+import { BoundedCache } from "./src/backend/pkg/bounded-cache"
 // 构建期内联 dist/index.html 作为 SPA 兜底壳
 setSpaFallbackHtml(INDEX_HTML)
 // 模块级：探测 EdgeKV 全局构造器（ESA 运行时可能挂在不同的全局对象上）
@@ -62,30 +63,41 @@ function getEdgeKVCtorAtRequestTime(): any {
  * 解决 ESA EdgeKV 最终一致性问题：put 写入后需要几秒到几十秒同步到所有边缘节点，
  * 保存设置后立即 get 可能打到还没同步的节点读到旧值，导致"保存后刷新复原"。
  *
- * 此处维护一个带 TTL 的模块级缓存：
+ * 此处维护一个带 TTL 和容量/单值上限的模块级缓存：
  * - put 成功后立即写入缓存，后续 get 优先从缓存读，不依赖 EdgeKV 同步
  * - get 未命中缓存时才发起真实 KV get，并写入缓存
+ * - 最多保留 4 个键，单个值最多 4 MiB；超大值不进入模块缓存
  * - 缓存 TTL 60 秒，避免长期持有旧数据（其他实例/节点更新的数据最多延迟 60 秒）
  * - 模块级缓存在函数实例复用期间有效，冷启动后为空（正常行为）
  */
 const MODULE_KV_CACHE_TTL_MS = 60_000
-const moduleKvCache = new Map<
+const MODULE_KV_CACHE_MAX_ENTRIES = 4
+const MODULE_KV_CACHE_MAX_VALUE_BYTES = 4 * 1024 * 1024
+const moduleKvCache = new BoundedCache<
   string,
-  { value: string | null; timestamp: number }
->()
+  { value: string | null }
+>({
+  maxEntries: MODULE_KV_CACHE_MAX_ENTRIES,
+  ttlMs: MODULE_KV_CACHE_TTL_MS,
+})
 
 function getModuleKvCache(key: string): string | null | undefined {
   const entry = moduleKvCache.get(key)
-  if (!entry) return undefined
-  if (Date.now() - entry.timestamp > MODULE_KV_CACHE_TTL_MS) {
-    moduleKvCache.delete(key)
-    return undefined
-  }
-  return entry.value
+  return entry?.value
 }
 
 function setModuleKvCache(key: string, value: string | null): void {
-  moduleKvCache.set(key, { value, timestamp: Date.now() })
+  if (
+    value !== null &&
+    new TextEncoder().encode(value).byteLength > MODULE_KV_CACHE_MAX_VALUE_BYTES
+  ) {
+    // Never retain a large user-controlled config blob merely to avoid a KV
+    // read. The request-level cache still prevents duplicate reads in one
+    // request, and the next request can fetch the complete value again.
+    moduleKvCache.delete(key)
+    return
+  }
+  moduleKvCache.set(key, { value })
 }
 
 function deleteModuleKvCache(key: string): void {

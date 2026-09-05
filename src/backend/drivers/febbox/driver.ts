@@ -5,6 +5,7 @@ import {
 } from "../../internal/driver/base"
 import { DriverFebBoxAddition, FebBoxFile } from "./types"
 import { ClientFebBox } from "./util"
+import { createWorkerCache } from "../../pkg/bounded-cache"
 
 function fileToItem(f: FebBoxFile): FileItem {
   const isDir = f.is_dir === 1
@@ -25,7 +26,7 @@ function fileToItem(f: FebBoxFile): FileItem {
 export class DriverFebBox implements StorageDriver {
   private client: ClientFebBox
   private userIp: string
-  private pathCache = new Map<string, string>()
+  private pathCache = createWorkerCache<string, string>()
 
   constructor(
     addition: DriverFebBoxAddition,

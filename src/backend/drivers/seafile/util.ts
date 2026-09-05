@@ -3,13 +3,17 @@ import {
   SeafileAuthTokenResp,
   SeafileLibraryItem,
 } from "./types"
+import { createWorkerCache } from "../../pkg/bounded-cache"
 
 export class SeafileApiClient {
   private addition: SeafileAddition
   private address: string
   private authorization: string = ""
   private onTokenRefreshed?: (token: string) => Promise<void>
-  private decryptedRepos: Map<string, number> = new Map() // repoId -> decrypted timestamp
+  private decryptedRepos = createWorkerCache<string, number>(
+    256,
+    30 * 60 * 1000,
+  ) // repoId -> decrypted timestamp
 
   constructor(
     addition: SeafileAddition,

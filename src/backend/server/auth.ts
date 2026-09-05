@@ -19,6 +19,7 @@ import {
   addUserSshKey,
   deleteUserSshKey,
 } from "../internal/op/sshkey"
+import { BoundedCache } from "../pkg/bounded-cache"
 
 export const authRouter = new Hono()
 export const meRouter = new Hono()
@@ -28,7 +29,13 @@ export const meRouter = new Hono()
 // 防止单实例上的无限制尝试。生产环境建议同时配置 IP 限流（ip_limit 设置项）。
 const LOGIN_MAX_FAILURES = 5
 const LOGIN_LOCK_MS = 15 * 60 * 1000
-const loginFailures = new Map<string, { count: number; lockedUntil: number }>()
+const loginFailures = new BoundedCache<
+  string,
+  { count: number; lockedUntil: number }
+>({
+  maxEntries: 2048,
+  ttlMs: LOGIN_LOCK_MS,
+})
 
 function clientIpOf(c: Context): string {
   return (
@@ -44,13 +51,7 @@ function loginKey(c: Context, username: string): string {
 }
 
 function isLoginLocked(c: Context, username: string): boolean {
-  // 懒清理：Map 过大时清掉已过锁定期/无锁定的条目，防止无限增长
-  if (loginFailures.size > 10000) {
-    const now = Date.now()
-    for (const [k, v] of loginFailures) {
-      if (v.lockedUntil < now && v.count === 0) loginFailures.delete(k)
-    }
-  }
+  loginFailures.prune()
   const rec = loginFailures.get(loginKey(c, username))
   return !!rec && rec.lockedUntil > Date.now()
 }
@@ -210,7 +211,7 @@ export async function authUserFromReq(
   try {
     const secret = await getJwtSecret(c)
     const payload = await verify(token, secret, "HS256")
-    if (await isTokenRevoked(payload?.jti, c.env)) return null
+    if (await isTokenRevoked(String(payload?.jti || ""), c.env)) return null
     const db = await getDb(c.env)
     if (!db.users) db.users = []
     const user = db.users.find(

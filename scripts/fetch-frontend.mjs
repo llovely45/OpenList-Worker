@@ -21,6 +21,10 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import {
+  applyFrontendPatches,
+  assertFrontendDistCompatible,
+} from "./frontend-patch.mjs"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 // 始终以仓库根目录为基准（无论从哪个 cwd 调用）
@@ -176,6 +180,11 @@ function prepareI18n(repo) {
 }
 
 function replaceDist(src) {
+  const resolvedSrc = path.resolve(src)
+  if (resolvedSrc === DEST) {
+    console.log(`✓ 前端产物已就绪 (${DEST})`)
+    return
+  }
   console.log(`  复制前端产物: ${src} -> ${DEST}`)
   fs.rmSync(DEST, { recursive: true, force: true })
   fs.cpSync(src, DEST, { recursive: true })
@@ -191,6 +200,10 @@ function buildLocalRepo(repo) {
   const pm = detectPackageManager(abs)
   installDependencies(pm, abs)
   prepareI18n(abs)
+  const frontendPatch = applyFrontendPatches(abs)
+  if (frontendPatch.changed) {
+    console.log("✓ 已应用 Worker 前端 401 loading 兼容补丁")
+  }
   run(pm.run("build"), { cwd: abs })
   replaceDist(path.join(abs, "dist"))
 }
@@ -203,6 +216,7 @@ function main() {
   if (localDist) {
     const src = path.resolve(localDist)
     requireDist(src)
+    assertFrontendDistCompatible(src)
     replaceDist(src)
     return
   }

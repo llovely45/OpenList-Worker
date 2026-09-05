@@ -8,6 +8,7 @@ import {
 import { sortFileItems } from "../../internal/driver/sort"
 import { WeiyunAddition, WeiyunFile, WeiyunFolder } from "./types"
 import { WeiyunClient } from "./util"
+import { createWorkerCache } from "../../pkg/bounded-cache"
 
 const SUBREQUEST_LIMIT = 45
 const UPLOAD_CHUNK_SIZE = 1024 * 1024 // 1MB per chunk
@@ -113,7 +114,7 @@ export class WeiyunDriver implements StorageDriver {
   private uploadThreads = 4
 
   /** Cache: physicalPath -> ResolvedFolderInfo */
-  private pathFolderCache = new Map<string, ResolvedFolderInfo>()
+  private pathFolderCache = createWorkerCache<string, ResolvedFolderInfo>()
   /** CF Workers subrequest budget */
   private budget = { used: 0, limit: SUBREQUEST_LIMIT }
 

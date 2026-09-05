@@ -5,12 +5,13 @@ import {
 } from "../../internal/driver/base"
 import { DriverQuarkOpenAddition, QuarkFile } from "./types"
 import { ClientQuarkOpen } from "./util"
+import { createWorkerCache } from "../../pkg/bounded-cache"
 
 const DEFAULT_ROOT = "0"
 
 export class DriverQuarkOpen implements StorageDriver {
   private client: ClientQuarkOpen
-  private pathCache = new Map<string, string>()
+  private pathCache = createWorkerCache<string, string>()
 
   constructor(addition: DriverQuarkOpenAddition) {
     this.client = new ClientQuarkOpen(addition)

@@ -5,10 +5,11 @@ import {
 } from "../../internal/driver/base"
 import { DriverMisskeyAddition } from "./types"
 import { ClientMisskey } from "./util"
+import { createWorkerCache } from "../../pkg/bounded-cache"
 
 export class DriverMisskey implements StorageDriver {
   private client: ClientMisskey
-  private pathCache = new Map<string, string>()
+  private pathCache = createWorkerCache<string, string>()
 
   constructor(addition: DriverMisskeyAddition) {
     this.client = new ClientMisskey(addition)

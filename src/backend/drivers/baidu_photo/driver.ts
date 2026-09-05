@@ -10,6 +10,7 @@ import {
   BaiduPhotoAlbumFile,
 } from "./types"
 import { ClientBaiduPhoto } from "./util"
+import { createWorkerCache } from "../../pkg/bounded-cache"
 
 function unixToIso(sec: number): string {
   return sec ? new Date(sec * 1000).toISOString() : new Date().toISOString()
@@ -90,7 +91,7 @@ function parseSign(sign: string): {
 export class DriverBaiduPhoto implements StorageDriver {
   private client: ClientBaiduPhoto
   private showType: string
-  private albumCache = new Map<string, BaiduPhotoAlbum>()
+  private albumCache = createWorkerCache<string, BaiduPhotoAlbum>()
 
   constructor(addition: DriverBaiduPhotoAddition) {
     this.client = new ClientBaiduPhoto(addition)

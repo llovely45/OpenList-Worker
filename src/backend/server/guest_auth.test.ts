@@ -77,6 +77,143 @@ test("Security: getUserFromContext returns null when guest is deleted or disable
   )
 })
 
+test("Security: an enabled guest account is not an anonymous credential", async () => {
+  const env: any = {}
+  await saveDb(
+    {
+      settings: [],
+      users: [
+        {
+          id: 1,
+          username: "admin",
+          password: "xxx",
+          role: 2,
+          permission: 0,
+          base_path: "/",
+          disabled: false,
+        },
+        {
+          id: 2,
+          username: "guest",
+          password: "",
+          role: 1,
+          permission: 0,
+          base_path: "/",
+          disabled: false,
+        },
+      ],
+      storages: [],
+      shares: [],
+    },
+    env,
+  )
+
+  const context: any = {
+    req: {
+      header: () => undefined,
+      query: () => undefined,
+    },
+    env,
+  }
+
+  assert.equal(await getUserFromContext(context), null)
+})
+
+test("Security: anonymous filesystem APIs require a real credential even when guest is enabled", async () => {
+  const env: any = {}
+  await saveDb(
+    {
+      settings: [],
+      users: [
+        {
+          id: 1,
+          username: "admin",
+          password: "xxx",
+          role: 2,
+          permission: 0,
+          base_path: "/",
+          disabled: false,
+        },
+        {
+          id: 2,
+          username: "guest",
+          password: "",
+          role: 1,
+          permission: 0,
+          base_path: "/",
+          disabled: false,
+        },
+      ],
+      storages: [],
+      shares: [],
+    },
+    env,
+  )
+
+  const app = new Hono()
+  app.route("/api/fs", fsRouter)
+  const cases = [
+    ["/api/fs/list", { path: "/" }],
+    ["/api/fs/get", { path: "/" }],
+    ["/api/fs/dirs", { path: "/" }],
+  ] as const
+
+  for (const [path, body] of cases) {
+    const res = await app.request(
+      path,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+      env,
+    )
+    assert.equal(res.status, 401, `${path} must reject anonymous callers`)
+  }
+
+  // Share browsing is an explicit public contract and must remain reachable
+  // without turning the normal storage root into a guest session.
+  const shareRes = await app.request(
+    "/api/fs/list",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: "/@s/not-found" }),
+    },
+    env,
+  )
+  assert.equal(shareRes.status, 400)
+})
+
+test("Security: public settings never advertise anonymous guest browsing", async () => {
+  const env: any = {}
+  await saveDb(
+    {
+      settings: [],
+      users: [
+        {
+          id: 2,
+          username: "guest",
+          password: "",
+          role: 1,
+          permission: 0,
+          base_path: "/",
+          disabled: false,
+        },
+      ],
+      storages: [],
+      shares: [],
+    },
+    env,
+  )
+
+  const app = new Hono()
+  app.route("/api/public", publicRouter)
+  const res = await app.request("/api/public/settings", {}, env)
+  const json: any = await res.json()
+  assert.equal(json.data.allow_guest, "false")
+})
+
 test("Security: /api/me returns 401 when unauthenticated and guest is deleted or disabled", async () => {
   const env: any = {}
   const adminHash = await hashPassword("admin123")

@@ -5,6 +5,7 @@ import {
 } from "../../internal/driver/base"
 import { DriverTeldriveAddition, TeldriveFile } from "./types"
 import { ClientTeldrive } from "./util"
+import { createWorkerCache } from "../../pkg/bounded-cache"
 
 function fileToItem(f: TeldriveFile): FileItem {
   const isDir = f.type === "folder"
@@ -21,7 +22,7 @@ function fileToItem(f: TeldriveFile): FileItem {
 
 export class DriverTeldrive implements StorageDriver {
   private client: ClientTeldrive
-  private pathCache = new Map<string, string>()
+  private pathCache = createWorkerCache<string, string>()
 
   constructor(addition: DriverTeldriveAddition) {
     this.client = new ClientTeldrive(addition)

@@ -13,6 +13,7 @@ import {
   htmlJsonToMap,
   getJSFunctionByName,
 } from "./help"
+import { createWorkerCache } from "../../pkg/bounded-cache"
 
 /** 蓝奏云分享页候选域名（分享 ID 全局可用，任一域名都能访问同一分享）。
  *  数据中心出口 IP（如 CF Workers）被某个 CDN 域名 WAF 拦截时，可自动切换到其他域名重试。 */
@@ -36,7 +37,7 @@ export class LanzouClient {
   /** acw_sc__v2 挑战值，按域名缓存（cookie 域绑定）。
    *  求解后持久化，后续请求都携带对应域名的值；
    *  数据中心 IP（CF Workers）不带此 cookie 会被蓝奏云 CDN WAF 403。 */
-  private acwMap = new Map<string, string>()
+  private acwMap = createWorkerCache<string, string>(16, 30 * 60 * 1000)
   /** 故障转移后成功的工作域名（如 lanzouw.com）。
    *  记录后后续分享域请求优先使用它，避免分享页与 ajaxfile.php 跨域导致 sign 失效。 */
   private workingShareHost: string = ""

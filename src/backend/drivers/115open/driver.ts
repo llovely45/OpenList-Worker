@@ -8,6 +8,7 @@ import {
 } from "../../internal/driver/base"
 import { sortFileItems } from "../../internal/driver/sort"
 import { sha1, hmacSha1Base64 } from "../../pkg/crypto"
+import { createWorkerCache } from "../../pkg/bounded-cache"
 import { Pan115Addition, Pan115File } from "./types"
 import { Pan115Client, ERR_OBJECT_NOT_FOUND } from "./util"
 
@@ -54,14 +55,17 @@ export class Pan115Driver implements StorageDriver {
   /** root 非默认时，路径前缀（Go Init 计算 parentPath） */
   private parentPath = "/"
   /** cache: 物理路径 → fid（复用） */
-  private fidCache = new Map<string, string>()
+  private fidCache = createWorkerCache<string, string>()
   /** CF subrequest 预算 */
   private budget = { used: 0, limit: SUBREQUEST_LIMIT }
   /**
    * 下载链接缓存（Go LinkCacheMode=UA 等价）：按 文件ID+UA 缓存，TTL 30 分钟。
    * 115 免费用户 downurl 接口有每日配额（code 406），缓存显著减少调用次数。
    */
-  private linkCache = new Map<string, { url: string; expire: number }>()
+  private linkCache = createWorkerCache<
+    string,
+    { url: string; expire: number }
+  >(256, 30 * 60 * 1000)
   private static readonly LINK_TTL_MS = 30 * 60 * 1000
 
   constructor(

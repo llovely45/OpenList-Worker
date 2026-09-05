@@ -3,6 +3,7 @@ import { sign } from "hono/jwt"
 import { getDb, saveDb } from "../internal/model/db"
 import { getJwtSecret } from "./middlewares"
 import { generateRandomPassword } from "./auth"
+import { BoundedCache } from "../pkg/bounded-cache"
 
 /**
  * SSO 登录（OAuth2 授权码流 + OIDC）。
@@ -20,7 +21,10 @@ import { generateRandomPassword } from "./auth"
 export const ssoRouter = new Hono()
 
 const STATE_EXPIRE_MS = 5 * 60 * 1000
-const stateStore = new Map<string, { ip: string; exp: number }>()
+const stateStore = new BoundedCache<string, { ip: string; exp: number }>({
+  maxEntries: 1024,
+  ttlMs: STATE_EXPIRE_MS,
+})
 
 function getSetting(db: any, key: string, def = ""): string {
   const item = (db.settings || []).find((s: any) => s.key === key)

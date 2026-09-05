@@ -5,10 +5,11 @@ import {
 } from "../../internal/driver/base"
 import { DriverTeambitionAddition } from "./types"
 import { ClientTeambition } from "./util"
+import { createWorkerCache } from "../../pkg/bounded-cache"
 
 export class DriverTeambition implements StorageDriver {
   private client: ClientTeambition
-  private pathCache = new Map<string, string>()
+  private pathCache = createWorkerCache<string, string>()
 
   constructor(addition: DriverTeambitionAddition) {
     this.client = new ClientTeambition(addition)

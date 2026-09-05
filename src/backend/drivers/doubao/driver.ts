@@ -5,12 +5,13 @@ import {
 } from "../../internal/driver/base"
 import { DriverDoubaoAddition, DoubaoFile } from "./types"
 import { ClientDoubao } from "./util"
+import { createWorkerCache } from "../../pkg/bounded-cache"
 
 const DEFAULT_ROOT = "0"
 
 export class DriverDoubao implements StorageDriver {
   private client: ClientDoubao
-  private pathCache = new Map<string, string>()
+  private pathCache = createWorkerCache<string, string>()
 
   constructor(addition: DriverDoubaoAddition) {
     this.client = new ClientDoubao(addition)

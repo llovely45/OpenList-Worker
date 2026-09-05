@@ -2,6 +2,7 @@ import { Context } from "hono"
 import { verify } from "hono/jwt"
 import { checkAdminAuth, isStaticApiToken } from "../pkg/utils"
 import { getDb } from "../internal/model/db"
+import { BoundedCache } from "../pkg/bounded-cache"
 
 // 不再硬编码 JWT 密钥。优先使用环境变量 JWT_SECRET（推荐在生产配置），
 // 否则从 KV 持久化一个随机密钥（首次生成后复用，重启不失效），
@@ -103,7 +104,11 @@ export async function getJwtSecret(c?: Context | any): Promise<string> {
 // 因此跨实例的「即时」失效不能保证精确，但能在单实例内立即生效，并随新实例
 // 冷启动逐步收敛。exp 过期后条目自动清理，不会无限增长。
 const REVOKED_KV_KEY = "openlist_revoked_tokens"
-const revokedJtis = new Set<string>()
+const MAX_REVOKED_TOKENS = 2048
+const revokedJtis = new BoundedCache<string, number>({
+  maxEntries: MAX_REVOKED_TOKENS,
+  ttlMs: 7 * 24 * 60 * 60 * 1000,
+})
 let revokedLoaded = false
 
 async function ensureRevokedLoaded(env: any): Promise<void> {
@@ -129,7 +134,9 @@ async function ensureRevokedLoaded(env: any): Promise<void> {
     const arr = JSON.parse(String(val))
     const now = Math.floor(Date.now() / 1000)
     for (const item of arr) {
-      if (item && item.jti && item.exp > now) revokedJtis.add(item.jti)
+      if (item && item.jti && item.exp > now) {
+        revokedJtis.set(String(item.jti), Number(item.exp))
+      }
     }
   } catch {
     // 黑名单加载失败时降级为不拦截（不影响登录）
@@ -142,7 +149,7 @@ export async function revokeToken(
   env: any,
 ): Promise<void> {
   if (!jti) return
-  revokedJtis.add(jti)
+  revokedJtis.set(jti, exp)
   try {
     const { getKvBinding } = await import("../internal/model/db")
     const kvInfo = await getKvBinding(env)
@@ -162,7 +169,9 @@ export async function revokeToken(
       }
     }
     const now = Math.floor(Date.now() / 1000)
-    arr = arr.filter((i) => i && i.exp > now)
+    arr = arr
+      .filter((i) => i && i.exp > now)
+      .slice(-(MAX_REVOKED_TOKENS - 1))
     arr.push({ jti, exp })
     const payload = JSON.stringify(arr)
     if (mode === "blob") {
@@ -250,8 +259,7 @@ export async function matchCronSecret(c: Context): Promise<boolean> {
  * 从请求上下文解析当前用户：
  * - 静态 API Token（与 adminAuthMiddleware 同源）→ 视为管理员
  * - JWT（Authorization header 或 query parameter token/access_token）→ 查 DB 用户
- * - 无凭证时，仅当数据库中存在且未禁用的 guest 用户时才返回该游客信息；
- * - 若 guest 用户不存在（被删除）或被禁用，则返回 null（未授权状态）。
+ * - 无凭证时一律返回 null；guest 账号不能把匿名请求变成已认证请求。
  */
 export async function getUserFromContext(c: Context): Promise<{
   id?: number
@@ -285,23 +293,6 @@ export async function getUserFromContext(c: Context): Promise<{
   }
 
   if (!authHeader) {
-    try {
-      const db = await getDb(c.env)
-      const guest = (db.users || []).find((u: any) => u.username === "guest")
-      if (guest && !guest.disabled) {
-        return {
-          id: guest.id,
-          role: guest.role ?? 1,
-          permission: guest.permission ?? 0,
-          disabled: !!guest.disabled,
-          username: guest.username,
-          base_path: guest.base_path || "/",
-          sso_id: guest.sso_id || "",
-          allow_ldap: !!guest.allow_ldap,
-          otp_secret: guest.otp_secret,
-        }
-      }
-    } catch {}
     return null
   }
 

@@ -5,6 +5,7 @@ import {
 } from "../../internal/driver/base"
 import { Driver123OpenAddition, File123 } from "./types"
 import { Client123Open } from "./util"
+import { createWorkerCache } from "../../pkg/bounded-cache"
 
 const DEFAULT_ROOT = "0"
 
@@ -17,7 +18,7 @@ function parseTime(s?: string): string {
 
 export class Driver123Open implements StorageDriver {
   private client: Client123Open
-  private pathCache = new Map<string, string>()
+  private pathCache = createWorkerCache<string, string>()
 
   constructor(addition: Driver123OpenAddition) {
     this.client = new Client123Open(addition)

@@ -6,6 +6,7 @@ import {
 import { sortFileItems } from "../../internal/driver/sort"
 import { AliyundriveOpenAddition, AliyunFileItem } from "./types"
 import { AliyunOpenClient } from "./util"
+import { createWorkerCache } from "../../pkg/bounded-cache"
 
 function aliyunFileToFileItem(f: AliyunFileItem): FileItem {
   const isDir = f.type === "folder"
@@ -24,7 +25,7 @@ function aliyunFileToFileItem(f: AliyunFileItem): FileItem {
 export class AliyundriveOpen implements StorageDriver {
   private client: AliyunOpenClient
   private addition: AliyundriveOpenAddition
-  private pathFileIdCache = new Map<string, string>()
+  private pathFileIdCache = createWorkerCache<string, string>()
 
   constructor(addition: AliyundriveOpenAddition) {
     this.addition = addition

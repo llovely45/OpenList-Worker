@@ -5,6 +5,7 @@ import {
 } from "../../internal/driver/base"
 import { Driver115Addition, Cloud115File } from "./types"
 import { Client115 } from "./util"
+import { createWorkerCache } from "../../pkg/bounded-cache"
 
 function fileToItem(f: Cloud115File): FileItem {
   const isDir = f.Fc === "0"
@@ -23,7 +24,7 @@ function fileToItem(f: Cloud115File): FileItem {
 
 export class Driver115 implements StorageDriver {
   private client: Client115
-  private pathCache = new Map<string, string>()
+  private pathCache = createWorkerCache<string, string>()
 
   constructor(addition: Driver115Addition) {
     this.client = new Client115(addition)

@@ -5,6 +5,7 @@ import {
 } from "../../internal/driver/base"
 import { DriverDegooAddition, DegooFileItem } from "./types"
 import { ClientDegoo } from "./util"
+import { createWorkerCache } from "../../pkg/bounded-cache"
 
 function isFolder(category: number): boolean {
   return category === 1 || category === 2 || category === 10
@@ -29,7 +30,7 @@ function fileToItem(f: DegooFileItem): FileItem {
 
 export class DriverDegoo implements StorageDriver {
   private client: ClientDegoo
-  private pathCache = new Map<string, string>()
+  private pathCache = createWorkerCache<string, string>()
 
   constructor(
     addition: DriverDegooAddition,

@@ -9,6 +9,7 @@ import { sortFileItems } from "../../internal/driver/sort"
 import { LanzouAddition, LanzouFileOrFolder } from "./types"
 import { LanzouClient } from "./util"
 import { mustParseTime, sizeStrToInt64 } from "./help"
+import { createWorkerCache } from "../../pkg/bounded-cache"
 
 export function normalizeLanzouAddition(a: any): LanzouAddition {
   const norm = { ...(a || {}) } as any
@@ -56,7 +57,7 @@ export class LanzouDriver implements StorageDriver {
   private client: LanzouClient
   private addition: LanzouAddition
   /** cache: physical path -> folderId (string) */
-  private pathIdCache = new Map<string, string>()
+  private pathIdCache = createWorkerCache<string, string>()
 
   constructor(
     addition: LanzouAddition,

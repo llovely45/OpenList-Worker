@@ -8,6 +8,7 @@ import {
 import { sortFileItems } from "../../internal/driver/sort"
 import { Pan123Addition, Pan123File, Pan123UploadResp } from "./types"
 import { Pan123Client } from "./util"
+import { createWorkerCache } from "../../pkg/bounded-cache"
 
 /** 分片会话上传：会话令牌中携带的数据（不透明地往返于前后端） */
 interface Pan123SessionData {
@@ -68,7 +69,7 @@ export class Pan123Driver implements StorageDriver {
   private client: Pan123Client
   private addition: Pan123Addition
   /** cache: physical path → folder FileId (string) */
-  private pathIdCache = new Map<string, string>()
+  private pathIdCache = createWorkerCache<string, string>()
   /**
    * Cloudflare Workers subrequest 预算（免费版单次 invocation 最多 50 个子请求）。
    * 所有分页/路径解析调用共享该预算；超出时截断并告警，避免

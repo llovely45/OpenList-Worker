@@ -5,6 +5,7 @@ import {
 } from "../../internal/driver/base"
 import { DriverChaoXingAddition, ChaoXingFile } from "./types"
 import { ClientChaoXing } from "./util"
+import { createWorkerCache } from "../../pkg/bounded-cache"
 
 function fileToItem(f: ChaoXingFile): FileItem {
   const c = f.content
@@ -36,7 +37,7 @@ function fileToItem(f: ChaoXingFile): FileItem {
 
 export class DriverChaoXing implements StorageDriver {
   private client: ClientChaoXing
-  private pathCache = new Map<string, string>()
+  private pathCache = createWorkerCache<string, string>()
 
   constructor(
     addition: DriverChaoXingAddition,

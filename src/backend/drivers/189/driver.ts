@@ -9,6 +9,7 @@ import { sortFileItems } from "../../internal/driver/sort"
 import { Cloud189Addition, FileItem189, FolderItem189 } from "./types"
 import { Pan189Client } from "./util"
 import { md5Hex } from "./crypto"
+import { createWorkerCache } from "../../pkg/bounded-cache"
 
 const SUBREQUEST_LIMIT = 45
 const UPLOAD_CHUNK_SIZE = 10 * 1024 * 1024
@@ -99,7 +100,7 @@ export class Cloud189Driver implements StorageDriver {
   private client: Pan189Client
   private addition: Cloud189Addition
   /** cache: physical path -> folderId (string) */
-  private pathIdCache = new Map<string, string>()
+  private pathIdCache = createWorkerCache<string, string>()
   /** CF Workers subrequest budget */
   private budget = { used: 0, limit: SUBREQUEST_LIMIT }
 

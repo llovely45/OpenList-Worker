@@ -1,11 +1,15 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import { Hono } from "hono"
+import { sign } from "hono/jwt"
 import { saveDb } from "../internal/model/db"
 import { fsRouter } from "./fs"
 
 const ADMIN_TOKEN = "ADMIN_STATIC_TOKEN"
-const env: any = { ADMIN_API_TOKEN: ADMIN_TOKEN }
+const env: any = {
+  ADMIN_API_TOKEN: ADMIN_TOKEN,
+  JWT_SECRET: "test-jwt-secret-for-fs-other",
+}
 
 /**
  * `/fs/other` dispatches driver-specific privileged operations. S3 uses it to
@@ -65,9 +69,13 @@ const post = (headers: Record<string, string> = {}) => {
   )
 }
 
-test("Security(H-8): guest cannot reach /api/fs/other", async () => {
+test("Security(H-8): authenticated guest cannot reach /api/fs/other", async () => {
   await seed()
-  const res = await post()
+  const guestToken = await sign(
+    { id: 2, username: "guest", role: 1 },
+    env.JWT_SECRET,
+  )
+  const res = await post({ Authorization: `Bearer ${guestToken}` })
   assert.equal(
     res.status,
     403,

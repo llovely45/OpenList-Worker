@@ -13,6 +13,8 @@
  * - received 以区间数组 [number, number][] 表示，供前端断点续传跳过已收分片。
  */
 
+import { BoundedCache } from "../../pkg/bounded-cache"
+
 export type MultipartState =
   | "receiving"
   | "completed"
@@ -55,11 +57,40 @@ export interface MultipartSnapshot {
   error?: string
 }
 
-const sessions = new Map<string, MultipartSession>()
+// Bytes are never kept here, but received indexes and md5 arrays are still
+// user-controlled metadata. Keep both the number and lifetime of sessions
+// bounded for the Workers Free memory budget.
+const MAX_MULTIPART_CHUNKS = 4_096
+const sessions = new BoundedCache<string, MultipartSession>({
+  maxEntries: 16,
+  ttlMs: 2 * 60 * 60 * 1000,
+})
 
 const CHUNK_MIN = 1 * 1024 * 1024 // 1MB
 const CHUNK_MAX = 64 * 1024 * 1024 // 64MB
 const CHUNK_DEFAULT = 10 * 1024 * 1024 // 10MB
+
+/**
+ * Return a safe chunk count for the in-memory received/md5 metadata, or null
+ * when the request would allocate more than the Worker budget allows.
+ */
+export function getMultipartChunkCount(
+  size: number,
+  chunkSize: number,
+): number | null {
+  if (
+    !Number.isSafeInteger(size) ||
+    size <= 0 ||
+    !Number.isSafeInteger(chunkSize) ||
+    chunkSize <= 0
+  ) {
+    return null
+  }
+  const total = Math.ceil(size / chunkSize)
+  return Number.isSafeInteger(total) && total <= MAX_MULTIPART_CHUNKS
+    ? total
+    : null
+}
 
 /** 将前端建议的 chunk_size clamp 到 [1MB, 64MB] */
 export function clampChunkSize(raw: number): number {
@@ -155,6 +186,7 @@ export function newUploadId(): string {
 
 /** 清理过期的 completed / aborted 会话（简单防内存泄漏） */
 export function pruneSessions(maxAgeMs = 60 * 60 * 1000): void {
+  sessions.prune()
   const now = Date.now()
   for (const [id, s] of sessions) {
     if (

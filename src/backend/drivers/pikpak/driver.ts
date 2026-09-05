@@ -12,13 +12,14 @@ import {
   PikPakFileListResp,
 } from "./types"
 import { PikPakApiClient } from "./util"
+import { createWorkerCache } from "../../pkg/bounded-cache"
 
 export class PikPakDriver implements StorageDriver {
   private addition: PikPakAddition
   private client: PikPakApiClient
   private rootId: string = ""
   // Map of physical path to file ID
-  private idCache: Map<string, string> = new Map()
+  private idCache = createWorkerCache<string, string>()
 
   constructor(
     addition: PikPakAddition,

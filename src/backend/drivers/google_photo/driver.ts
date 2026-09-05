@@ -5,6 +5,7 @@ import {
 } from "../../internal/driver/base"
 import { DriverGooglePhotoAddition, GooglePhotoMediaItem } from "./types"
 import { ClientGooglePhoto } from "./util"
+import { createWorkerCache } from "../../pkg/bounded-cache"
 
 function fileToItem(f: GooglePhotoMediaItem): FileItem {
   if (f.filename) {
@@ -31,7 +32,7 @@ function fileToItem(f: GooglePhotoMediaItem): FileItem {
 
 export class DriverGooglePhoto implements StorageDriver {
   private client: ClientGooglePhoto
-  private pathCache = new Map<string, string>()
+  private pathCache = createWorkerCache<string, string>()
 
   constructor(addition: DriverGooglePhotoAddition) {
     this.client = new ClientGooglePhoto(addition)

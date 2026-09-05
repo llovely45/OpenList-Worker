@@ -5,6 +5,7 @@ import {
 } from "../../internal/driver/base"
 import { QuarkAddition, QuarkFile } from "./types"
 import { QuarkClient } from "./util"
+import { createWorkerCache } from "../../pkg/bounded-cache"
 
 function quarkFileToFileItem(f: QuarkFile): FileItem {
   const isDir = !f.file
@@ -26,7 +27,7 @@ function quarkFileToFileItem(f: QuarkFile): FileItem {
 
 export class QuarkDriver implements StorageDriver {
   private client: QuarkClient
-  private pathFileIdCache = new Map<string, string>()
+  private pathFileIdCache = createWorkerCache<string, string>()
 
   constructor(addition: QuarkAddition) {
     this.client = new QuarkClient(addition)

@@ -5,6 +5,7 @@ import {
 } from "../../internal/driver/base"
 import { Driver189TVAddition, Cloud189TVFile, Cloud189TVFolder } from "./types"
 import { Client189TV } from "./util"
+import { createWorkerCache } from "../../pkg/bounded-cache"
 
 function parseTime(value: string | undefined): string {
   if (!value) return new Date().toISOString()
@@ -43,7 +44,7 @@ function fileToItem(f: Cloud189TVFile | Cloud189TVFolder): FileItem {
 
 export class Driver189TV implements StorageDriver {
   private client: Client189TV
-  private pathCache = new Map<string, string>()
+  private pathCache = createWorkerCache<string, string>()
 
   constructor(
     addition: Driver189TVAddition,

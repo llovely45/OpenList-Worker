@@ -7,6 +7,7 @@ import { sortFileItems } from "../../internal/driver/sort"
 import { SpaceTypeFamily, SpaceTypePersonal, SortRules } from "./consts"
 import { WoPanAddition, WoPanFile } from "./types"
 import { WoPanClient } from "./util"
+import { createWorkerCache } from "../../pkg/bounded-cache"
 
 function parseWoPanDate(str: string): string {
   if (!str) return new Date().toISOString()
@@ -56,8 +57,8 @@ export class WoPanDriver implements StorageDriver {
   private client: WoPanClient
   private addition: WoPanAddition
   private defaultFamilyId: string = ""
-  private pathFileMapCache = new Map<string, WoPanFile>()
-  private pathFolderIdCache = new Map<string, string>()
+  private pathFileMapCache = createWorkerCache<string, WoPanFile>()
+  private pathFolderIdCache = createWorkerCache<string, string>()
 
   constructor(
     addition: WoPanAddition,

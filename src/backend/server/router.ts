@@ -19,13 +19,21 @@ import { taskRouter } from "./task"
 import { ssoRouter } from "./sso"
 import { webauthnRouter } from "./webauthn"
 import { updatePwdHandler } from "./user"
+import { BoundedCache } from "../pkg/bounded-cache"
 
 // --- 尽力而为的进程内限流 ---
 // 实现管理后台的 ip_limit（每 IP 每分钟请求数）与 traffic_limit（每 IP 每小时
 // 响应流量 MB）。Cloudflare Workers 多实例下各隔离区独立计数（非全局精确），
 // 但能显著限制单实例上的滥用/拉流/暴力请求；配合登录防爆破共同生效。
-const ipReqCounts = new Map<string, { start: number; count: number }>()
-const ipTraffic = new Map<string, { start: number; bytes: number }>()
+const RATE_LIMIT_MAX_IPS = 4096
+const ipReqCounts = new BoundedCache<string, { start: number; count: number }>({
+  maxEntries: RATE_LIMIT_MAX_IPS,
+  ttlMs: 60_000,
+})
+const ipTraffic = new BoundedCache<string, { start: number; bytes: number }>({
+  maxEntries: RATE_LIMIT_MAX_IPS,
+  ttlMs: 60 * 60 * 1000,
+})
 
 function getClientIp(c: any): string {
   return (
@@ -37,17 +45,8 @@ function getClientIp(c: any): string {
 }
 
 function cleanupMaps() {
-  const now = Date.now()
-  if (ipReqCounts.size > 20000) {
-    for (const [k, v] of ipReqCounts) {
-      if (now - v.start > 60000) ipReqCounts.delete(k)
-    }
-  }
-  if (ipTraffic.size > 20000) {
-    for (const [k, v] of ipTraffic) {
-      if (now - v.start > 3600000) ipTraffic.delete(k)
-    }
-  }
+  ipReqCounts.prune()
+  ipTraffic.prune()
 }
 
 async function rateLimitMiddleware(c: any, next: () => Promise<void>) {

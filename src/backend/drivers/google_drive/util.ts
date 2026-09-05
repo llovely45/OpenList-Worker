@@ -5,6 +5,7 @@ import {
   GOOGLE_DRIVE_SHORTCUT_MIME,
   FILES_LIST_FIELDS,
 } from "./types"
+import { createWorkerCache } from "../../pkg/bounded-cache"
 
 const GDRIVE_API = "https://www.googleapis.com/drive/v3"
 const GDRIVE_UPLOAD_API = "https://www.googleapis.com/upload/drive/v3"
@@ -386,7 +387,7 @@ export class GoogleDriveClient {
   // ===================================================
   // Path resolution (virtualPath -> file_id)
   // ===================================================
-  private pathCache = new Map<string, string>()
+  private pathCache = createWorkerCache<string, string>()
 
   public async resolveFileId(physicalPath: string): Promise<string> {
     const clean = physicalPath.split("/").filter(Boolean).join("/")

@@ -18,6 +18,7 @@ import {
   UPLOAD_RETRY_WAIT_MS,
   normalizeBaiduAddition,
 } from "./util"
+import { createWorkerCache } from "../../pkg/bounded-cache"
 
 export { normalizeBaiduAddition } from "./util"
 
@@ -63,7 +64,10 @@ export class BaiduDriver implements StorageDriver {
   private uploadThread = 3
   private vipType = 0
   /** cache: physical path → { fsId, parentPath, name } for move/copy/rename */
-  private pathCache = new Map<string, { fsId: number; parent: string }>()
+  private pathCache = createWorkerCache<
+    string,
+    { fsId: number; parent: string }
+  >()
 
   constructor(
     addition: BaiduAddition,

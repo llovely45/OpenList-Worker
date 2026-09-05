@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
 import { Hono } from "hono"
+import { sign } from "hono/jwt"
 import { saveDb } from "../internal/model/db"
 import { verifyDownloadSign } from "../pkg/sign"
 import { fsRouter } from "./fs"
@@ -47,11 +48,18 @@ test("fs/get includes the download sign in raw_url", async () => {
 
     const app = new Hono()
     app.route("/api/fs", fsRouter)
+    const guestToken = await sign(
+      { id: 1, username: "guest", role: 1 },
+      env.JWT_SECRET,
+    )
     const res = await app.request(
       "/api/fs/get",
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          Authorization: `Bearer ${guestToken}`,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ path: "/x/file.png" }),
       },
       env,

@@ -75,6 +75,7 @@ import { StrmDriver } from "../../drivers/strm/driver"
 import { ChunkDriver } from "../../drivers/chunk/driver"
 import { AzureBlobDriver } from "../../drivers/azure_blob/driver"
 import { UssDriver } from "../../drivers/uss/driver"
+import { BoundedCache } from "../../pkg/bounded-cache"
 
 // LocalDriver is not available in Cloudflare Workers (no fs module).
 // When running in Node.js container mode, import dynamically on first use.
@@ -111,19 +112,21 @@ async function getFTPDriver(storageConfig: any): Promise<StorageDriver> {
   )
 }
 
-const driverCache = new Map<string, StorageDriver>()
-const driverInitCache = new Map<string, Promise<StorageDriver>>()
-const cookiePersistenceCache = new Map<string, Promise<void>>()
-
-// M-8：驱动实例缓存容量上限。storage.modified 变化会产生新 key，旧条目若不清理，
-// 长生命周期 isolate 中会无限累积。超出上限时按插入顺序淘汰最旧条目。
-const MAX_DRIVER_CACHE = 100
+const MAX_DRIVER_CACHE = 16
+const driverCache = new BoundedCache<string, StorageDriver>({
+  maxEntries: MAX_DRIVER_CACHE,
+  ttlMs: 15 * 60 * 1000,
+})
+const driverInitCache = new BoundedCache<string, Promise<StorageDriver>>({
+  maxEntries: MAX_DRIVER_CACHE,
+  ttlMs: 5 * 60 * 1000,
+})
+const cookiePersistenceCache = new BoundedCache<string, Promise<void>>({
+  maxEntries: 256,
+  ttlMs: 5 * 60 * 1000,
+})
 
 function setDriverCache(key: string, driver: StorageDriver): void {
-  if (driverCache.size >= MAX_DRIVER_CACHE) {
-    const oldestKey = driverCache.keys().next().value
-    if (oldestKey !== undefined) driverCache.delete(oldestKey)
-  }
   driverCache.set(key, driver)
 }
 

@@ -5,10 +5,11 @@ import {
 } from "../../internal/driver/base"
 import { DriverMediafireAddition } from "./types"
 import { ClientMediafire } from "./util"
+import { createWorkerCache } from "../../pkg/bounded-cache"
 
 export class DriverMediafire implements StorageDriver {
   private client: ClientMediafire
-  private pathCache = new Map<string, string>()
+  private pathCache = createWorkerCache<string, string>()
 
   constructor(addition: DriverMediafireAddition) {
     this.client = new ClientMediafire(addition)

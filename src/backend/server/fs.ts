@@ -28,6 +28,7 @@ import {
   clampChunkSize,
   deleteSession,
   findReceivingSession,
+  getMultipartChunkCount,
   getSession,
   MultipartSession,
   newUploadId,
@@ -1271,7 +1272,17 @@ fsRouter.post("/multipart/init", async (c) => {
     }
 
     const chunkSize = clampChunkSize(rawChunk)
-    const totalChunks = Math.max(1, Math.ceil(size / chunkSize))
+    const totalChunks = getMultipartChunkCount(size, chunkSize)
+    if (totalChunks === null) {
+      return c.json(
+        {
+          code: 413,
+          message: "Multipart file metadata exceeds the Worker limit",
+          data: null,
+        },
+        413,
+      )
+    }
 
     // 断点续传：同 path+size 的未完成会话直接复用
     let session: MultipartSession

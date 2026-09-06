@@ -185,7 +185,8 @@ export class Pan115Driver implements StorageDriver {
     if (cached) return cached
 
     // 用 GetFolderInfoByPath 一次性解析（Go Get 逻辑）
-    const fullPath = `/${rootId === "0" ? "" : rootId}${clean === "/" ? "" : clean}`
+    const fullPath =
+      rootId === "0" ? clean : `/${rootId}${clean === "/" ? "" : clean}`
     try {
       if (!this.reserve()) throw new Error("subrequest budget exceeded")
       const info = await this.client.getFolderInfoByPath(fullPath)
@@ -346,6 +347,9 @@ export class Pan115Driver implements StorageDriver {
       .split("/")
       .filter(Boolean)
     const dirName = segs.pop() || "新文件夹"
+    if (!dirName.trim()) {
+      throw new Error("115 网盘目录名称不能为空")
+    }
     const parentPath = "/" + segs.join("/")
     const parentId = await this.resolveFolderId(parentPath)
     if (!this.reserve()) throw new Error("subrequest budget exceeded")

@@ -163,6 +163,18 @@ publicRouter.get("/settings", async (c) => {
   })
 })
 
+// The official frontend requests this during its initial bootstrap. Keep the
+// response public and limited to the boolean it needs to choose the login or
+// initialization screen.
+publicRouter.get("/init_status", async (c) => {
+  const db = await getDb(c.env)
+  return c.json({
+    code: 200,
+    message: "success",
+    data: { initialized: Array.isArray(db.users) && db.users.length > 0 },
+  })
+})
+
 publicRouter.get("/archive_extensions", (c) => {
   return c.json({
     code: 200,

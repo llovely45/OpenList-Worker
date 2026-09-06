@@ -133,3 +133,25 @@ test("Feature: admin defaults expose multipart controls in traffic settings", ()
   assert.equal(chunkSize?.type, "number")
   assert.equal(chunkSize?.group, 10)
 })
+
+test("Compatibility: /api/public/init_status reports the frontend initialization state", async () => {
+  await saveDb(
+    {
+      settings: [],
+      users: [{ id: 1, username: "admin" }],
+      storages: [],
+      shares: [],
+    },
+    env,
+  )
+
+  const app = new Hono()
+  app.route("/api/public", publicRouter)
+  const res = await app.request("/api/public/init_status")
+  assert.equal(res.status, 200)
+
+  const json: any = await res.json()
+  assert.equal(json.code, 200)
+  assert.equal(json.message, "success")
+  assert.deepEqual(json.data, { initialized: true })
+})

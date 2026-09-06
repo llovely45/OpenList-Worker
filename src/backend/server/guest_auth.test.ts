@@ -77,7 +77,7 @@ test("Security: getUserFromContext returns null when guest is deleted or disable
   )
 })
 
-test("Security: an enabled guest account is not an anonymous credential", async () => {
+test("Compatibility: getUserFromContext resolves an enabled guest anonymously", async () => {
   const env: any = {}
   await saveDb(
     {
@@ -116,10 +116,20 @@ test("Security: an enabled guest account is not an anonymous credential", async 
     env,
   }
 
-  assert.equal(await getUserFromContext(context), null)
+  assert.deepEqual(await getUserFromContext(context), {
+    id: 2,
+    role: 1,
+    permission: 0,
+    disabled: false,
+    username: "guest",
+    base_path: "/",
+    sso_id: "",
+    allow_ldap: false,
+    otp_secret: undefined,
+  })
 })
 
-test("Security: anonymous filesystem APIs require a real credential even when guest is enabled", async () => {
+test("Compatibility: /api/me returns the anonymous guest user when guest is enabled", async () => {
   const env: any = {}
   await saveDb(
     {
@@ -151,41 +161,17 @@ test("Security: anonymous filesystem APIs require a real credential even when gu
   )
 
   const app = new Hono()
-  app.route("/api/fs", fsRouter)
-  const cases = [
-    ["/api/fs/list", { path: "/" }],
-    ["/api/fs/get", { path: "/" }],
-    ["/api/fs/dirs", { path: "/" }],
-  ] as const
-
-  for (const [path, body] of cases) {
-    const res = await app.request(
-      path,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      },
-      env,
-    )
-    assert.equal(res.status, 401, `${path} must reject anonymous callers`)
-  }
-
-  // Share browsing is an explicit public contract and must remain reachable
-  // without turning the normal storage root into a guest session.
-  const shareRes = await app.request(
-    "/api/fs/list",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: "/@s/not-found" }),
-    },
-    env,
-  )
-  assert.equal(shareRes.status, 400)
+  app.route("/api/me", authRouter)
+  const res = await app.request("/api/me/me", {}, env)
+  assert.equal(res.status, 200)
+  const json: any = await res.json()
+  assert.equal(json.code, 200)
+  assert.equal(json.data.id, 2)
+  assert.equal(json.data.username, "guest")
+  assert.equal(json.data.role, 1)
 })
 
-test("Security: public settings never advertise anonymous guest browsing", async () => {
+test("Compatibility: public settings advertise anonymous guest browsing for an enabled guest", async () => {
   const env: any = {}
   await saveDb(
     {
@@ -211,7 +197,7 @@ test("Security: public settings never advertise anonymous guest browsing", async
   app.route("/api/public", publicRouter)
   const res = await app.request("/api/public/settings", {}, env)
   const json: any = await res.json()
-  assert.equal(json.data.allow_guest, "false")
+  assert.equal(json.data.allow_guest, "true")
 })
 
 test("Security: /api/me returns 401 when unauthenticated and guest is deleted or disabled", async () => {

@@ -28,7 +28,7 @@ export const meRouter = new Hono()
 // Cloudflare Workers 多实例下各隔离区独立计数，但能显著提高暴力破解成本，
 // 防止单实例上的无限制尝试。生产环境建议同时配置 IP 限流（ip_limit 设置项）。
 const LOGIN_MAX_FAILURES = 5
-const LOGIN_LOCK_MS = 15 * 60 * 1000
+const LOGIN_LOCK_MS = 5 * 60 * 1000
 const loginFailures = new BoundedCache<
   string,
   { count: number; lockedUntil: number }
@@ -46,18 +46,18 @@ function clientIpOf(c: Context): string {
   )
 }
 
-function loginKey(c: Context, username: string): string {
-  return `${clientIpOf(c)}|${String(username || "").toLowerCase()}`
+function loginKey(c: Context): string {
+  return clientIpOf(c)
 }
 
-function isLoginLocked(c: Context, username: string): boolean {
+function isLoginLocked(c: Context): boolean {
   loginFailures.prune()
-  const rec = loginFailures.get(loginKey(c, username))
+  const rec = loginFailures.get(loginKey(c))
   return !!rec && rec.lockedUntil > Date.now()
 }
 
-function recordLoginFailure(c: Context, username: string) {
-  const key = loginKey(c, username)
+function recordLoginFailure(c: Context) {
+  const key = loginKey(c)
   const now = Date.now()
   const rec = loginFailures.get(key) || { count: 0, lockedUntil: 0 }
   if (rec.lockedUntil > now) return // already locked
@@ -69,8 +69,8 @@ function recordLoginFailure(c: Context, username: string) {
   loginFailures.set(key, rec)
 }
 
-function clearLoginFailures(c: Context, username: string) {
-  loginFailures.delete(loginKey(c, username))
+function clearLoginFailures(c: Context) {
+  loginFailures.delete(loginKey(c))
 }
 
 // Helper to hash password matching OpenList/AList specification
@@ -233,17 +233,17 @@ async function checkUserOtp(matchedUser: any, body: any) {
     return {
       ok: false,
       code: 402,
-      httpStatus: 200 as const,
-      message: "OTP code required",
+      httpStatus: 402 as const,
+      message: "Invalid 2FA code",
     }
   }
   const valid = await verifyTotpCode(matchedUser.otp_secret, otpCode)
   if (!valid) {
     return {
       ok: false,
-      code: 401,
-      httpStatus: 401 as const,
-      message: "Invalid OTP code",
+      code: 402,
+      httpStatus: 402 as const,
+      message: "Invalid 2FA code",
     }
   }
   return { ok: true, code: 200, httpStatus: 200 as const, message: "ok" }
@@ -252,16 +252,23 @@ async function checkUserOtp(matchedUser: any, body: any) {
 // POST /api/auth/login
 authRouter.post("/login", async (c) => {
   const body = await c.req.json().catch(() => ({}))
-  const username = (body.username || "").trim()
+  const username = typeof body.username === "string" ? body.username.trim() : ""
   const rawPassword = body.password || ""
 
-  // 防爆破：IP+用户名维度连续失败锁定
-  if (isLoginLocked(c, username)) {
+  if (!username) {
+    return c.json(
+      { code: 400, message: "Username is required", data: null },
+      400,
+    )
+  }
+
+  // 防爆破：按官方 Go 版以 IP 维度统计连续失败
+  if (isLoginLocked(c)) {
     return c.json(
       {
         code: 429,
         message:
-          "Too many failed login attempts for this account/IP, please try again later",
+          "Too many unsuccessful sign-in attempts have been made using an incorrect username or password, Try again later.",
         data: null,
       },
       429,
@@ -284,17 +291,18 @@ authRouter.post("/login", async (c) => {
     if (isPasswordValid) {
       const otpCheck = await checkUserOtp(matchedUser, body)
       if (!otpCheck.ok) {
+        recordLoginFailure(c)
         return c.json(
           { code: otpCheck.code, message: otpCheck.message, data: null },
           otpCheck.httpStatus,
         )
       }
-      clearLoginFailures(c, username)
+      clearLoginFailures(c)
       const payload = {
         id: matchedUser.id,
         username: matchedUser.username,
         role: matchedUser.role,
-        exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7,
+        exp: Math.floor(Date.now() / 1000) + 60 * 60 * 48,
         jti: generateJti(),
       }
       const secret = await getJwtSecret(c)
@@ -307,25 +315,35 @@ authRouter.post("/login", async (c) => {
     }
   }
 
-  recordLoginFailure(c, username)
-  return c.json({ code: 401, message: "Invalid credentials", data: null }, 401)
+  recordLoginFailure(c)
+  return c.json(
+    { code: 401, message: "Invalid username or password", data: null },
+    401,
+  )
 })
 
 // POST /api/auth/login/hash
 authRouter.post("/login/hash", async (c) => {
   const body = await c.req.json().catch(() => ({}))
-  const username = (body.username || "").trim()
+  const username = typeof body.username === "string" ? body.username.trim() : ""
   const inputHash = String(body.password || "")
     .trim()
     .toLowerCase()
 
-  // 防爆破：与 /login 同一计数体系
-  if (isLoginLocked(c, username)) {
+  if (!username) {
+    return c.json(
+      { code: 400, message: "Username is required", data: null },
+      400,
+    )
+  }
+
+  // 防爆破：与 /login 同一 IP 计数体系
+  if (isLoginLocked(c)) {
     return c.json(
       {
         code: 429,
         message:
-          "Too many failed login attempts for this account/IP, please try again later",
+          "Too many unsuccessful sign-in attempts have been made using an incorrect username or password, Try again later.",
         data: null,
       },
       429,
@@ -347,17 +365,18 @@ authRouter.post("/login/hash", async (c) => {
     if (isHashValid) {
       const otpCheck = await checkUserOtp(matchedUser, body)
       if (!otpCheck.ok) {
+        recordLoginFailure(c)
         return c.json(
           { code: otpCheck.code, message: otpCheck.message, data: null },
           otpCheck.httpStatus,
         )
       }
-      clearLoginFailures(c, username)
+      clearLoginFailures(c)
       const payload = {
         id: matchedUser.id,
         username: matchedUser.username,
         role: matchedUser.role,
-        exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7,
+        exp: Math.floor(Date.now() / 1000) + 60 * 60 * 48,
         jti: generateJti(),
       }
       const secret = await getJwtSecret(c)
@@ -370,8 +389,11 @@ authRouter.post("/login/hash", async (c) => {
     }
   }
 
-  recordLoginFailure(c, username)
-  return c.json({ code: 401, message: "Invalid credentials", data: null }, 401)
+  recordLoginFailure(c)
+  return c.json(
+    { code: 401, message: "Invalid username or password", data: null },
+    401,
+  )
 })
 
 // POST /api/me/update or /me/update

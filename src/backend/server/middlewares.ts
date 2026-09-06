@@ -169,9 +169,7 @@ export async function revokeToken(
       }
     }
     const now = Math.floor(Date.now() / 1000)
-    arr = arr
-      .filter((i) => i && i.exp > now)
-      .slice(-(MAX_REVOKED_TOKENS - 1))
+    arr = arr.filter((i) => i && i.exp > now).slice(-(MAX_REVOKED_TOKENS - 1))
     arr.push({ jti, exp })
     const payload = JSON.stringify(arr)
     if (mode === "blob") {
@@ -259,7 +257,7 @@ export async function matchCronSecret(c: Context): Promise<boolean> {
  * 从请求上下文解析当前用户：
  * - 静态 API Token（与 adminAuthMiddleware 同源）→ 视为管理员
  * - JWT（Authorization header 或 query parameter token/access_token）→ 查 DB 用户
- * - 无凭证时一律返回 null；guest 账号不能把匿名请求变成已认证请求。
+ * - 无凭证时读取启用的 guest 用户，与官方 Go 版 Auth 中间件一致。
  */
 export async function getUserFromContext(c: Context): Promise<{
   id?: number
@@ -293,6 +291,23 @@ export async function getUserFromContext(c: Context): Promise<{
   }
 
   if (!authHeader) {
+    try {
+      const db = await getDb(c.env)
+      const guest = (db.users || []).find((u: any) => u.username === "guest")
+      if (guest && !guest.disabled) {
+        return {
+          id: guest.id,
+          role: guest.role ?? 1,
+          permission: guest.permission ?? 0,
+          disabled: !!guest.disabled,
+          username: guest.username,
+          base_path: guest.base_path || "/",
+          sso_id: guest.sso_id || "",
+          allow_ldap: !!guest.allow_ldap,
+          otp_secret: guest.otp_secret,
+        }
+      }
+    } catch {}
     return null
   }
 

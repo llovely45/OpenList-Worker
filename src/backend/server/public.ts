@@ -90,10 +90,9 @@ publicRouter.get("/settings", async (c) => {
     check_update: "false",
 
     // --- Auth ---
-    // Anonymous filesystem access is disabled in the Worker.  A persisted
-    // `guest` row is only a legacy account record; it must never advertise or
-    // grant access without an Authorization credential.
-    allow_guest: "false",
+    // Match the official Go backend: an enabled `guest` user grants anonymous
+    // read access, while a disabled or missing guest user does not.
+    allow_guest: "true",
     webauthn_login_enabled: "false",
     sso_login_enabled: "false",
     sso_compatibility_mode: "false",
@@ -151,10 +150,15 @@ publicRouter.get("/settings", async (c) => {
     }
   })
 
-  // Keep this false even when an old database contains `allow_guest=true` or
-  // an enabled guest row.  The Worker has no anonymous guest session path;
-  // only explicit shares remain public.
-  settingsObj.allow_guest = "false"
+  // Match the effective Go behavior: the setting is true only when the guest
+  // account exists, is enabled, and has not been explicitly disabled.
+  const guest = (db.users || []).find((u: any) => u.username === "guest")
+  const isGuestActive = Boolean(guest && !guest.disabled)
+  if (!isGuestActive || settingsObj.allow_guest === "false") {
+    settingsObj.allow_guest = "false"
+  } else {
+    settingsObj.allow_guest = "true"
+  }
 
   return c.json({
     code: 200,

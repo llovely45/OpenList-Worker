@@ -9,7 +9,7 @@ import {
 import { sortFileItems } from "../../internal/driver/sort"
 import { sha1, hmacSha1Base64 } from "../../pkg/crypto"
 import { createWorkerCache } from "../../pkg/bounded-cache"
-import { Pan115Addition, Pan115File } from "./types"
+import { Pan115Addition, Pan115File, Pan115FolderInfoResp } from "./types"
 import { Pan115Client, ERR_OBJECT_NOT_FOUND } from "./util"
 
 /** OpenList Go base.UserAgent（与 Go 驱动一致，115 防盗链校验通过率高） */
@@ -33,6 +33,35 @@ function pan115FileToFileItem(f: Pan115File): FileItem {
     type: calcFileType(f.fn, isDir),
     thumb: f.thumbnail || f.fco || "",
     raw_url: "",
+  }
+}
+
+function parsePan115Time(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value
+  const text = String(value || "")
+  const numeric = Number(text)
+  if (Number.isFinite(numeric) && numeric > 0) return numeric
+  const parsed = Date.parse(text)
+  return Number.isFinite(parsed) ? Math.floor(parsed / 1000) : 0
+}
+
+function folderInfoToFile(info: Pan115FolderInfoResp): Pan115File {
+  const name = info.file_name || ""
+  return {
+    fid: info.file_id || "",
+    aid: "1",
+    pid: "",
+    fc: String(info.file_category ?? "1"),
+    fn: name,
+    fco: "",
+    pc: info.pick_code || "",
+    upt: parsePan115Time(info.utime),
+    uet: parsePan115Time(info.utime),
+    uppt: parsePan115Time(info.ptime),
+    sha1: info.sha1 || "",
+    fs: info.size_byte || 0,
+    ico: name.includes(".") ? name.split(".").pop() || "" : "",
+    thumbnail: "",
   }
 }
 
@@ -255,6 +284,25 @@ export class Pan115Driver implements StorageDriver {
         return rawName
       }
     })()
+
+    // 115's folder/get_info endpoint also resolves files and returns the
+    // pick_code required by downurl.  The list endpoint may omit that field
+    // for some files, which otherwise leaves raw_url empty.
+    const rootId = this.getRootId()
+    const fullPath =
+      rootId === "0" ? clean : `/${rootId}${clean === "/" ? "" : clean}`
+    try {
+      if (!this.reserve()) throw new Error("subrequest budget exceeded")
+      const info = await this.client.getFolderInfoByPath(fullPath)
+      if (info.file_category !== "0" && info.file_id && info.file_name) {
+        return folderInfoToFile(info)
+      }
+    } catch (e: any) {
+      // A file path is not supported by some 115 API deployments; fall back
+      // to the parent listing in that case, matching the Go driver.
+      if (e?.code !== ERR_OBJECT_NOT_FOUND && e?.code !== 990002) throw e
+    }
+
     const parentPath = "/" + segs.join("/")
 
     const parentId = await this.resolveFolderId(parentPath)

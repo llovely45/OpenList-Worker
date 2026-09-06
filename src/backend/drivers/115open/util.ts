@@ -38,6 +38,16 @@ function isAuthError(code: number): boolean {
 /** SDK Error Code 430004 = 对象不存在 */
 export const ERR_OBJECT_NOT_FOUND = 430004
 
+function normalizeFolderInfo(data: unknown): Pan115FolderInfoResp {
+  const info = Array.isArray(data) ? data[0] : data
+  if (!info || typeof info !== "object") {
+    const error: any = new Error("115 object not found")
+    error.code = ERR_OBJECT_NOT_FOUND
+    throw error
+  }
+  return info as Pan115FolderInfoResp
+}
+
 export class Pan115Client {
   private addition: Pan115Addition
   public accessToken = ""
@@ -264,21 +274,23 @@ export class Pan115Client {
   }
 
   public async getFolderInfo(fileId: string): Promise<Pan115FolderInfoResp> {
-    return (
+    const data = (
       await this.request(ApiFsGetFolderInfo, "GET", {
         file_id: fileId,
       })
-    )?.data as Pan115FolderInfoResp
+    )?.data
+    return normalizeFolderInfo(data)
   }
 
   public async getFolderInfoByPath(
     path: string,
   ): Promise<Pan115FolderInfoResp> {
-    return (
+    const data = (
       await this.request(ApiFsGetFolderInfo, "POST", undefined, {
         path,
       })
-    )?.data as Pan115FolderInfoResp
+    )?.data
+    return normalizeFolderInfo(data)
   }
 
   public async mkdir(pid: string, fileName: string): Promise<Pan115MkdirResp> {

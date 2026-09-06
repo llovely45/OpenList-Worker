@@ -10,8 +10,16 @@ import {
   moveItems,
   copyItems,
 } from "../internal/op/storage"
+import { normalizeWebdavPolicy } from "../internal/op/storage"
+import { resolvePath } from "../internal/model/db"
 import { buildWebDavPropfindResponse } from "../internal/webdav/webdav"
 import { safeErrorMessage } from "../pkg/errs"
+import { assertSafeUrl } from "../pkg/http"
+import {
+  appendDownloadSign,
+  getSignPolicy,
+  signDownloadPath,
+} from "../pkg/sign"
 
 /**
  * WebDAV 协议服务（挂载于 /dav/*）。
@@ -46,7 +54,9 @@ async function webdavAuth(c: any): Promise<any> {
       const username = decoded.substring(0, idx)
       const password = decoded.substring(idx + 1)
       const { users } = await getOrInitUsers(c.env)
-      const user = users.find((u: any) => u.username === username && !u.disabled)
+      const user = users.find(
+        (u: any) => u.username === username && !u.disabled,
+      )
       if (!user) return null
       // 空密码用户（guest）：Basic Auth 下若未提供密码则允许（与 AList 一致）
       if (!user.password) {
@@ -87,6 +97,120 @@ function splitPath(p: string): { dir: string; name: string } {
   return { dir, name }
 }
 
+const DEFAULT_PROXY_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+function encodePath(path: string): string {
+  return (
+    "/" +
+    path
+      .split("/")
+      .filter(Boolean)
+      .map((part) => encodeURIComponent(part))
+      .join("/")
+  )
+}
+
+async function buildConfiguredProxyUrl(
+  c: any,
+  storage: any,
+  virtualPath: string,
+): Promise<string> {
+  const base = String(storage?.down_proxy_url || "")
+    .split("\n")[0]
+    .trim()
+  if (!base) return ""
+
+  const joined = `${base.replace(/\/$/, "")}${encodePath(virtualPath)}`
+  const signPolicy = await getSignPolicy(c)
+  if (!signPolicy.enabled) return joined
+
+  const sign = await signDownloadPath(c, virtualPath, signPolicy.expiresIn)
+  return appendDownloadSign(joined, sign)
+}
+
+function setForwardedResponseHeaders(c: any, response: Response): void {
+  const headers = [
+    "content-type",
+    "content-length",
+    "content-range",
+    "accept-ranges",
+    "etag",
+    "last-modified",
+    "cache-control",
+    "content-disposition",
+  ]
+  for (const name of headers) {
+    const value = response.headers.get(name)
+    if (value) c.header(name, value.replace(/[\r\n\u0000-\u001f]+/g, ""))
+  }
+}
+
+async function proxyWebdavFile(c: any, item: any): Promise<Response> {
+  if (!item?.raw_url) {
+    return c.text(
+      item?.raw_url_error || "The storage driver did not return a download URL",
+      404,
+    )
+  }
+
+  try {
+    assertSafeUrl(item.raw_url, "WebDAV proxy download")
+  } catch (error: any) {
+    return c.text(error?.message || "SSRF blocked", 403)
+  }
+
+  const headers: Record<string, string> = { ...(item.raw_url_headers || {}) }
+  if (!headers["User-Agent"]) headers["User-Agent"] = DEFAULT_PROXY_USER_AGENT
+  const range = c.req.header("Range")
+  if (range) headers.Range = range
+
+  let upstream = await fetch(item.raw_url, {
+    method: c.req.method,
+    headers,
+  })
+  if (upstream.status === 412 && range) {
+    delete headers.Range
+    upstream = await fetch(item.raw_url, {
+      method: c.req.method,
+      headers,
+    })
+  }
+
+  setForwardedResponseHeaders(c, upstream)
+  c.header("Access-Control-Allow-Origin", "*")
+  return c.body(upstream.body as any, upstream.status as any)
+}
+
+async function getWebdavFileResponse(
+  c: any,
+  davPath: string,
+  item: any,
+  rawUrl: string,
+): Promise<Response> {
+  const resolved = await resolvePath(davPath)
+  const policy = normalizeWebdavPolicy(resolved.storage?.webdav_policy)
+
+  if (policy === "302_redirect") {
+    const location = item.raw_url || rawUrl
+    if (!location)
+      return c.text("The storage driver did not return a download URL", 404)
+    try {
+      assertSafeUrl(location, "WebDAV redirect download")
+    } catch (error: any) {
+      return c.text(error?.message || "SSRF blocked", 403)
+    }
+    return c.redirect(location, 302)
+  }
+
+  if (policy === "use_proxy_url") {
+    const proxyUrl = await buildConfiguredProxyUrl(c, resolved.storage, davPath)
+    if (proxyUrl) return c.redirect(proxyUrl, 302)
+  }
+
+  return proxyWebdavFile(c, item)
+}
+
 webdavRouter.all("/*", async (c) => {
   const user = await webdavAuth(c)
   if (!user) {
@@ -108,7 +232,10 @@ webdavRouter.all("/*", async (c) => {
     switch (method) {
       case "OPTIONS": {
         c.header("DAV", "1, 2")
-        c.header("Allow", "OPTIONS, PROPFIND, GET, HEAD, PUT, MKCOL, DELETE, MOVE, COPY")
+        c.header(
+          "Allow",
+          "OPTIONS, PROPFIND, GET, HEAD, PUT, MKCOL, DELETE, MOVE, COPY",
+        )
         c.header("MS-Author-Via", "DAV")
         return c.body(null, 200)
       }
@@ -123,7 +250,12 @@ webdavRouter.all("/*", async (c) => {
           isFolder: !!it.is_dir,
           modified: it.modified || new Date().toISOString(),
         }))
-        const href = davPath === "/" ? "/" : davPath.endsWith("/") ? davPath : davPath + "/"
+        const href =
+          davPath === "/"
+            ? "/"
+            : davPath.endsWith("/")
+              ? davPath
+              : davPath + "/"
         const xml = buildWebDavPropfindResponse(href, items)
         return c.body(xml, depth === "0" ? 207 : 207, {
           "Content-Type": "application/xml; charset=utf-8",
@@ -136,9 +268,9 @@ webdavRouter.all("/*", async (c) => {
         const { item, rawUrl } = await getItem(davPath, ctx)
         if (!item) return c.text("Not found", 404)
         if (item.is_dir) return c.text("Is a directory", 400)
-        // 重定向到 rawRouter（/api/p/*）实际下载；rawRouter 已处理所有驱动的
-        // 下载协议（proxy/redirect/stream + Range + SSRF 防护）
-        return c.redirect(rawUrl || `/api/p${davPath.startsWith("/") ? "" : "/"}${davPath}`, 302)
+        // Match the Go WebDAV handler: webdav_policy, not web_proxy, selects
+        // 302 redirect, configured proxy URL, or native proxy streaming.
+        return getWebdavFileResponse(c, davPath, item, rawUrl)
       }
 
       case "PUT": {
@@ -166,7 +298,9 @@ webdavRouter.all("/*", async (c) => {
         const destRaw = c.req.header("Destination") || ""
         let dest = destRaw
         try {
-          dest = decodeURIComponent(new URL(destRaw, c.req.url).pathname).replace(/^\/dav/, "")
+          dest = decodeURIComponent(
+            new URL(destRaw, c.req.url).pathname,
+          ).replace(/^\/dav/, "")
         } catch {}
         const src = splitPath(davPath)
         const dst = splitPath(dest)
@@ -179,7 +313,9 @@ webdavRouter.all("/*", async (c) => {
         const destRaw = c.req.header("Destination") || ""
         let dest = destRaw
         try {
-          dest = decodeURIComponent(new URL(destRaw, c.req.url).pathname).replace(/^\/dav/, "")
+          dest = decodeURIComponent(
+            new URL(destRaw, c.req.url).pathname,
+          ).replace(/^\/dav/, "")
         } catch {}
         const src = splitPath(davPath)
         const dst = splitPath(dest)

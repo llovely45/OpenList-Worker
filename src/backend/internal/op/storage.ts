@@ -134,6 +134,25 @@ export interface StorageRequestContext {
   waitUntil?: (promise: Promise<unknown>) => void
 }
 
+export type WebdavPolicy = "302_redirect" | "use_proxy_url" | "native_proxy"
+
+/**
+ * Normalize the storage-level WebDAV download policy.
+ *
+ * This is intentionally separate from `web_proxy`: the Go server uses
+ * `web_proxy` for the normal `/fs/get` preview contract, while the WebDAV
+ * handler uses `webdav_policy` for `/dav/*` GET/HEAD requests.
+ */
+export function normalizeWebdavPolicy(value: unknown): WebdavPolicy {
+  const policy = String(value || "")
+    .trim()
+    .toLowerCase()
+  if (policy === "use_proxy_url" || policy === "native_proxy") {
+    return policy
+  }
+  return "302_redirect"
+}
+
 export async function getOrCreateDriver(
   cache: Map<string, Promise<StorageDriver>>,
   key: string,

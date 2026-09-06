@@ -1,254 +1,284 @@
+# OpenList-Worker
+
+_基于 TypeScript、Hono 与 Cloudflare Workers 的 OpenList 运行版 fork；版本信息按当前 `main` 分支记录，更新于 2026-09-06。_
+
 <div align="center">
-  <img src="https://raw.githubusercontent.com/OpenListTeam/Logo/main/logo.svg" width="128" height="128" alt="logo" />
+  <img src="https://raw.githubusercontent.com/OpenListTeam/Logo/main/logo.svg" width="128" height="128" alt="OpenList logo" />
 
-  <p><em>OpenList 是一个有韧性、长期治理、社区驱动的 AList 分支，旨在防御基于信任的开源攻击。</em></p>
+  <p><strong>将 OpenList 后端运行在 Workers / Edge Functions / Serverless 平台</strong></p>
 
-  <p>本仓库（OpenList-TSWorker）是官方 <a href="https://github.com/OpenListTeam/OpenList">OpenListTeam/OpenList</a> 项目的 TypeScript 移植版</p>
-  <p>基于 Cloudflare Workers / EdgeOne Cloud Function 运行</p>
-
-<a href="https://github.com/OpenListTeam/OpenList/blob/main/LICENSE"><img src="https://img.shields.io/github/license/OpenListTeam/OpenList" alt="License" /></a>
-<a href="https://github.com/OpenListTeam/OpenList/actions?query=workflow%3ABuild"><img src="https://img.shields.io/github/actions/workflow/status/OpenListTeam/OpenList/build.yml?branch=main" alt="Build status" /></a>
-<a href="https://github.com/OpenListTeam/OpenList/releases"><img src="https://img.shields.io/github/release/OpenListTeam/OpenList" alt="latest version" /></a>
-
-<a href="https://github.com/OpenListTeam/OpenList/discussions"><img src="https://img.shields.io/github/discussions/OpenListTeam/OpenList?color=%23ED8936" alt="discussions" /></a>
-<a href="https://github.com/OpenListTeam/OpenList/releases"><img src="https://img.shields.io/github/downloads/OpenListTeam/OpenList/total?color=%239F7AEA&logo=github" alt="Downloads" /></a>
+<a href="https://github.com/llovely45/OpenList-Worker/actions/workflows/deploy-worker.yml"><img src="https://github.com/llovely45/OpenList-Worker/actions/workflows/deploy-worker.yml/badge.svg?branch=main" alt="Deploy status" /></a>
+<a href="https://github.com/llovely45/OpenList-Worker/blob/main/LICENSE"><img src="https://img.shields.io/github/license/llovely45/OpenList-Worker" alt="License" /></a>
 
 </div>
 
 ---
 
-- English | 中文（本文件） | [日本語](https://github.com/OpenListTeam/OpenList/blob/main/README/README_ja.md) | [更多语言](https://github.com/OpenListTeam/OpenList/tree/main/README)
-
-- [上游项目](https://github.com/OpenListTeam/OpenList)
-- [贡献指南](https://github.com/OpenListTeam/OpenList/blob/main/CONTRIBUTING.md)
-- [行为准则](https://github.com/OpenListTeam/OpenList/blob/main/CODE_OF_CONDUCT.md)
+- [上游 Worker 仓库](https://github.com/OpenListTeam/OpenList-Worker)
+- [Go 版 OpenList](https://github.com/OpenListTeam/OpenList)
+- [官方前端](https://github.com/OpenListTeam/OpenList-Frontend)
+- [Cloudflare Workers 部署指南](./docs/deploy-cloudflare-workers.md)
+- [EdgeOne Makers 部署指南](./docs/edgeone.md)
+- [贡献指南](./CONTRIBUTING.md)
 - [许可证](./LICENSE)
 
-## 关于本移植版
+## 📌 项目定位
 
-OpenList-TSWorker 是官方 [OpenListTeam/OpenList](https://github.com/OpenListTeam/OpenList)（Go 后端，位于 `OpenList-Backends`）的 TypeScript 移植版，将后端从 Go 重写为运行于 Cloudflare Workers 上的 TypeScript 服务，前端保持一致的界面与交互体验。
+本仓库是在 [OpenListTeam/OpenList-Worker](https://github.com/OpenListTeam/OpenList-Worker) 基础上维护的 fork，并加入了面向边缘部署的构建、认证、上传、下载和 115 Open 兼容性修复。
 
-- 上游源码：https://github.com/OpenListTeam/OpenList
-- 本项目仅对上游进行技术栈移植（Go → TypeScript / Cloudflare Workers），不改动功能语义与数据模型。
-- 本项目遵循与上游一致的 [AGPL-3.0](./LICENSE) 开源许可证。
+- 后端源码位于 `src/backend/`，使用 TypeScript + Hono，入口为 `src/backend/worker.ts`
+- 前端源码不再内置在本仓库；构建时由 `scripts/fetch-frontend.mjs` 获取 [OpenList-Frontend](https://github.com/OpenListTeam/OpenList-Frontend) 并生成 `dist/`
+- Cloudflare Workers 默认使用 KV 持久化配置；EdgeOne 优先使用 Blob，其他 Serverless 入口默认可能退回内存存储
+- 本项目与 Go 版 OpenList 的 API 和界面保持兼容方向，但不是 Go 版的单体二进制，也不承诺所有驱动在所有运行时都可用
 
-## 免责声明
+## 🧭 版本与上游同步基线
 
-OpenList 是一个由 OpenList 团队独立维护的开源项目，遵循 AGPL-3.0 许可证，致力于保持完整的代码开放性和修改透明性。
+以下是本次 README 更新时仓库中能够确认的版本快照：
 
-我们注意到社区中出现了一些与本项目名称相似的第三方项目，如 OpenListApp/OpenListApp，以及部分采用相同或近似命名的收费专有软件。为避免用户误解，现声明如下：
+| 对象             | 来源或分支                                        | 提交 / 版本                                                                                                  | 说明                                                     |
+| ---------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------- |
+| 后端上游同步来源 | `OpenListTeam/OpenList-Worker` 的 `main`          | [`cd25094`](https://github.com/OpenListTeam/OpenList-Worker/commit/cd250946b73e88e48c81c419a0fa3cc188f2da4d) | 最近一次同步的上游基线，2026-09-05                       |
+| 本地同步合并     | 本仓库 `main`                                     | [`75b7631`](https://github.com/llovely45/OpenList-Worker/commit/75b7631)                                     | 将上游 `main` 合并进本地修复分支                         |
+| 当前 fork        | `llovely45/OpenList-Worker` 的 `main`             | [`e1157e4`](https://github.com/llovely45/OpenList-Worker/commit/e1157e40b8805feb2ef54c36eb95c4e71d5cbe1c)    | 当前 README 对应的代码快照                               |
+| 应用 / API 版本  | `package.json`、`/health`、`/api/public/settings` | `4.2.3` / `v4.2.3`                                                                                           | 仓库当前没有同名 Git tag；这是应用版本，不是 release tag |
+| 前端构建来源     | `OpenListTeam/OpenList-Frontend` 的 `main`        | 构建时获取                                                                                                   | 当前没有锁定前端 commit，可用 `FRONTEND_GIT_REF` 覆盖    |
 
-- OpenList 与任何第三方衍生项目无官方关联。
+`.github/workflows/sync-upstream.yml` 会定期或手动执行 `git fetch upstream main`，再将上游 `main` 合并到本仓库 `main`。因此，上表是当前快照；后续自动同步后，应同步更新 README 中的上游提交和当前提交。
 
-- 本项目的全部软件、代码与服务由 OpenList 团队维护，可在 GitHub 免费获取。
+## 🛠️ 与上游的差异与修复
 
-- 项目文档与 API 服务均主要依托于 Cloudflare 提供的公益资源，目前无任何收费计划或商业部署，现有功能使用不涉及任何支出。
+对比基线为上表中的上游提交 `cd25094`，不是 Go 版 OpenList。生成的 `cloud-functions/[[default]].js` 只作为部署产物，不单独列为功能差异。
 
-我们尊重社区的自由使用与衍生开发权利，但也强烈呼吁下游项目：
+| 模块            | 本仓库的差异或修复                                                                                                                            | 实际效果                                                              |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Cloudflare 部署 | Worker 入口改为始终返回 Promise；修正 `esbuild` 的模块解析和边缘构建；补充 KV、Assets、日志配置以及自动部署工作流                             | `wrangler deploy` 能使用当前 Worker 入口和 `dist/` 静态资源部署       |
+| Edge / 前端构建 | 按官方前端 `packageManager` 使用对应 pnpm；自动补齐 i18n；对官方 `useFetch` 应用 Worker 专用 401 loading 修复，并拒绝带旧 bug 的预构建 `dist` | 避免中文语言包缺失，以及 API 返回 401 后页面无限 loading              |
+| 115 驱动分派    | 将旧版 `115`、`115cloud`、`115netdisk` 与 `115Open`、`115Pan` 分开分派                                                                        | 115 Open Platform 不再误走旧版 115 驱动                               |
+| 115 存量数据    | 增加 `/api/admin/driver/115open/repair` 和修复插件，将历史别名规范化为 `115Open`，只更新 `driver` / `modified`，不改写 token                  | 已有 115 Open 存储可以在部署后修复并刷新驱动实例                      |
+| 115 路径操作    | 修复默认根目录产生双斜杠的问题；拒绝空白目录名                                                                                                | 根目录下的目录列表、目录创建路径更稳定                                |
+| 管理员认证      | 静态管理员 API token 从数据库设置项 `token` 分离到 Worker Secret `ADMIN_API_TOKEN`                                                            | 115 token、登录密码和管理员 API token 不再共用；CI 可安全调用管理接口 |
+| 匿名访问        | Worker 不再把数据库中的 `guest` 记录当作匿名登录；公开设置固定返回 `allow_guest=false`                                                        | 未携带凭证的请求不能获得文件系统权限，显式分享链接仍可使用            |
+| 下载签名        | 启用 `sign_all` 或 `link_expiration` 时，将 HMAC 下载签名同时写入 `raw_url` 和代理下载 URL                                                    | 前端直接消费 `raw_url` 时也会受到签名和过期时间保护                   |
+| 分片上传        | 默认公开设置启用 multipart，默认分片大小为 10 MB；限制会话、分片元数据的数量和生命周期                                                        | 大文件可按官方前端契约断点上传，长生命周期 Worker 不会因缓存无限增长  |
+| 进程内缓存      | 驱动、登录失败、IP 限流、token 撤销和 Edge KV 缓存统一增加容量上限与 TTL                                                                      | 降低长时间运行的 Worker / Edge Function 内存持续增长风险              |
 
-- 不应以“OpenList”名义进行冒名宣传或获取商业利益；
+相关修复提交包括 [`f178a30`](https://github.com/llovely45/OpenList-Worker/commit/f178a30)、[`92f8478`](https://github.com/llovely45/OpenList-Worker/commit/92f8478)、[`e8ad7b0`](https://github.com/llovely45/OpenList-Worker/commit/e8ad7b0)、[`7f4c335`](https://github.com/llovely45/OpenList-Worker/commit/7f4c335)、[`167a541`](https://github.com/llovely45/OpenList-Worker/commit/167a541)、[`dcafa93`](https://github.com/llovely45/OpenList-Worker/commit/dcafa93)、[`1f052c5`](https://github.com/llovely45/OpenList-Worker/commit/1f052c5) 和 [`e1157e4`](https://github.com/llovely45/OpenList-Worker/commit/e1157e4)。
 
-- 不得将基于 OpenList 的代码进行闭源分发或违反 AGPL 许可证条款。
+## ✨ 功能
 
-为了更好地维护生态健康发展，我们建议：
+- 多种存储：阿里云盘、OneDrive / SharePoint、天翼云盘、Google Drive、123 云盘、FTP / SFTP、PikPak、S3、Seafile、WebDAV、115、百度网盘、夸克、迅雷、GitHub、OpenList、Teldrive 等
+- 文件浏览、搜索、排序、分页和受保护路由
+- 图片画廊、视频 / 音频、PDF、Markdown、代码和 Office 文档预览
+- 上传、下载、删除、新建文件夹、重命名、移动、复制和打包下载
+- 官方前端国际化、暗色模式、永久链接、分享链接和 WebDAV
+- Cloudflare Workers 原生部署，以及 EdgeOne Makers、阿里云 ESA、Vercel、AWS Serverless 适配入口
+- Hono API、JWT 登录、管理员后台、插件系统、WebDAV 服务和 S3 网关
 
-- 明确注明项目来源，并以符合开源精神的方式选择适当的开源许可证；
+### 平台限制
 
-- 如涉及商业用途，请避免使用“OpenList”或任何会产生混淆的方式作为项目名称；
+- Cloudflare Workers / EdgeOne 等边缘运行时没有原始 TCP socket；`Local`、`FTP`、`SFTP` 以及基于 `mysql2` 的数据库后端需要完整 Node.js 运行时
+- 边缘构建会把 Node 专属依赖替换为空实现；相关驱动会明确返回运行时不支持，而不是在构建阶段让整个项目失败
+- 归档预览在 Worker 环境中主要支持 ZIP；Serverless 环境没有常驻后台任务，离线下载工具列表可能为空
+- Vercel / Lambda 等无 KV 绑定的部署默认是内存模式，重启或换实例后配置不会自动持久化，必须自行接入持久化后端
 
-- 若需使用本项目位于 OpenListTeam/Logo 下的素材，可在遵守协议的前提下进行修改后使用。
+## 🧱 技术栈与目录
 
-感谢您对 OpenList 项目的支持与理解。
+| 层次              | 实现                                                                             |
+| ----------------- | -------------------------------------------------------------------------------- |
+| 前端              | 官方 `OpenList-Frontend`，SolidJS + TypeScript + Vite，构建产物为 `dist/`        |
+| 后端              | Hono + TypeScript，Worker 入口为 `src/backend/worker.ts`                         |
+| Cloudflare 持久化 | KV 默认后端；可选 Cloudflare D1，配置见 `docs/database-backend-multi-support.md` |
+| EdgeOne 持久化    | `@edgeone/pages-blob`，并兼容 EdgeOne / KV binding                               |
+| Node 适配         | `api/[...route].ts`、`handler.ts`、`dist-server/api/[...route].js`               |
 
-## 功能
-
-- [x] 多种存储
-  - [x] 本地存储
-  - [x] [阿里云盘](https://www.alipan.com)
-  - [x] OneDrive / Sharepoint（[国际版](https://www.microsoft.com/en-us/microsoft-365/onedrive/online-cloud-storage)、[中国](https://portal.partner.microsoftonline.cn)、DE、US）
-  - [x] [天翼云盘](https://cloud.189.cn)（个人、家庭）
-  - [x] [GoogleDrive](https://drive.google.com)
-  - [x] [123云盘](https://www.123pan.com)
-  - [x] [FTP / SFTP](https://en.wikipedia.org/wiki/File_Transfer_Protocol)
-  - [x] [PikPak](https://www.mypikpak.com)
-  - [x] [S3](https://aws.amazon.com/s3)
-  - [x] [Seafile](https://seafile.com)
-  - [x] [又拍云对象存储](https://www.upyun.com/products/file-storage)
-  - [x] [WebDAV](https://en.wikipedia.org/wiki/WebDAV)
-  - [x] Teambition（[中国](https://www.teambition.com)、[国际](https://us.teambition.com)）
-  - [x] [MediaFire](https://www.mediafire.com)
-  - [x] [分秒帧](https://www.mediatrack.cn)
-  - [x] [ProtonDrive](https://proton.me/drive)
-  - [x] [和彩云](https://yun.139.com)（个人、家庭、群组、分享）
-  - [x] [YandexDisk](https://disk.yandex.com)
-  - [x] [百度网盘](http://pan.baidu.com)
-  - [x] [Terabox](https://www.terabox.com/main)
-  - [x] [UC网盘](https://drive.uc.cn)
-  - [x] [夸克网盘](https://pan.quark.cn)
-  - [x] [迅雷网盘](https://pan.xunlei.com)
-  - [x] [蓝奏云](https://www.lanzou.com)
-  - [x] [蓝奏云优享版](https://www.ilanzou.com)
-  - [x] [Google 相册](https://photos.google.com)
-  - [x] [Mega.nz](https://mega.nz)
-  - [x] [百度相册](https://photo.baidu.com)
-  - [x] [SMB](https://en.wikipedia.org/wiki/Server_Message_Block)
-  - [x] [115](https://115.com)
-  - [x] [Cloudreve](https://cloudreve.org)
-  - [x] [Dropbox](https://www.dropbox.com)
-  - [x] [飞机盘](https://www.feijipan.com)
-  - [x] [多吉云](https://www.dogecloud.com/product/oss)
-  - [x] [Azure Blob Storage](https://azure.microsoft.com/products/storage/blobs)
-  - [x] [超星](https://www.chaoxing.com)
-  - [x] [CNB](https://cnb.cool/)
-  - [x] [Degoo](https://degoo.com)
-  - [x] [豆包](https://www.doubao.com)
-  - [x] [Febbox](https://www.febbox.com)
-  - [x] [GitHub](https://github.com)
-  - [x] [OpenList](https://github.com/OpenListTeam/OpenList)
-  - [x] [Teldrive](https://github.com/tgdrive/teldrive)
-  - [x] [微云](https://www.weiyun.com)
-  - [x] [钉钉文档](https://alidocs.dingtalk.com/)
-- [x] 部署方便，开箱即用
-- [x] 文件预览（PDF、markdown、代码、纯文本等）
-- [x] 画廊模式下的图片预览
-- [x] 视频和音频预览，支持歌词和字幕
-- [x] Office 文档预览（docx、pptx、xlsx 等）
-- [x] `README.md` 预览渲染
-- [x] 文件永久链接复制和直接文件下载
-- [x] 黑暗模式
-- [x] 国际化
-- [x] 受保护的路由（密码保护和认证）
-- [x] WebDAV
-- [x] Cloudflare Workers 原生部署
-- [x] 文件/文件夹打包下载
-- [x] 网页上传（可允许访客上传）、删除、新建文件夹、重命名、移动和复制
-- [x] 离线下载
-- [x] 跨存储复制文件
-- [x] 单文件多线程下载/流式加速
-
-## 技术栈（本移植版）
-
-### 后端
-
-- **运行环境**：Cloudflare Workers（Edge Computing）
-- **Web 框架**：Hono.js
-- **数据库**：Cloudflare D1（SQLite）/ 支持 MySQL、MariaDB、PostgreSQL、SQL Server
-- **缓存**：Cloudflare KV（可选）
-- **语言**：TypeScript
-- **构建工具**：Wrangler、esbuild
-
-### 前端
-
-- **框架**：React 19 + TypeScript
-- **UI 库**：Ant Design / Material-UI
-- **构建工具**：Vite
-
-### 项目结构
-
-```
-OpenList-TSWorker/
-├── src/                      # 后端源码（TypeScript / Cloudflare Workers）
-│   ├── admin/               # 系统管理模块
-│   ├── binds/               # OAuth 绑定管理
-│   ├── crypt/               # 加密配置管理
-│   ├── drive/               # 云存储驱动
-│   ├── fetch/               # 离线下载管理
-│   ├── files/               # 文件操作管理
-│   ├── group/               # 用户组管理
-│   ├── mates/               # 元数据配置管理
-│   ├── mount/               # 挂载路径管理
-│   ├── oauth/               # OAuth 认证管理
-│   ├── saves/               # 数据持久化
-│   ├── share/               # 分享管理
-│   ├── system/              # 系统信息
-│   ├── tasks/               # 任务管理
-│   ├── token/               # Token 管理
-│   ├── users/               # 用户管理
-│   └── index.ts             # 主入口文件
-├── pages/                    # 前端源码
-├── prisma/                   # Prisma 数据模型
-├── migrations/               # 数据库迁移
-├── schema.sql               # 数据库结构
-├── wrangler.jsonc           # Cloudflare Workers 配置
-└── package.json             # 项目依赖
+```text
+.
+├── src/backend/                 # Hono 后端、驱动、认证、文件与管理接口
+├── api/[...route].ts            # Vercel / Edge Function 适配入口
+├── handler.ts                   # AWS Lambda 适配入口
+├── scripts/
+│   ├── fetch-frontend.mjs       # 获取并构建官方前端
+│   ├── frontend-patch.mjs       # Worker 前端兼容补丁
+│   ├── build-edge.mjs           # 构建 Node / Edge 产物
+│   └── deploy.js                # Cloudflare 一键部署脚本
+├── dist/                        # 前端静态产物
+├── dist-server/                 # Node / Vercel Serverless 产物
+├── cloud-functions/             # EdgeOne 必需的已提交云函数产物
+├── plugins/                     # Worker 插件，例如 115 Open 修复插件
+├── wrangler.toml                # Cloudflare Workers 配置
+├── edgeone.json                 # EdgeOne Makers 配置
+├── esa.jsonc                    # 阿里云 ESA 配置
+└── vercel.json                  # Vercel 路由配置
 ```
 
-## 快速开始
+## 🚀 快速开始
 
-> 完整部署说明请参考上游官方文档：[https://doc.oplist.org](https://doc.oplist.org)
+### 环境要求
 
-### 前置要求
+- Node.js 22.13+（推荐；EdgeOne 配置使用 Node.js `22.21.1`）
+- pnpm `9.15.4`（根项目 `packageManager` 中已声明）
+- 使用 Cloudflare Workers 时需要 Cloudflare 账号和 Workers / KV 权限
 
-- Node.js 18+
-- Cloudflare 账号（用于部署到 Workers）
+### 安装和构建
+
+```bash
+pnpm install --frozen-lockfile
+pnpm run build
+```
+
+`pnpm run build` 会依次获取官方前端、补齐翻译、应用 Worker 401 loading 兼容补丁、构建 `dist/`，并生成 `dist-server/`、`cloud-functions/[[default]].js` 以及 `dist/esa-entry.js`。
+
+默认前端来源是 `OpenList-Frontend` 的 `main` 分支。需要固定分支或 commit 时：
+
+```bash
+FRONTEND_GIT_REF=<branch-or-commit> pnpm run build
+```
+
+也可以复用本地前端仓库或已经构建好的产物：
+
+```bash
+FRONTEND_REPO=../OpenList-Frontend pnpm run build
+FRONTEND_DIST=../OpenList-Frontend/dist pnpm run fetch:frontend
+```
 
 ### 本地开发
 
 ```bash
-# 1. 安装后端依赖
-npm install
+# 获取前端并启动 Workers 模拟环境
+pnpm run dev:unified
 
-# 2. 安装前端依赖
-npm run install:page
-
-# 3. 配置 wrangler.jsonc（填写 JWT_SECRET、KV/D1 绑定）
-
-# 4. 启动后端开发服务器
-npm run dev
-
-# 5. 在另一个终端启动前端开发服务器
-npm run dev:page
+# 仅启动 Worker；需要先确保 dist/ 已存在
+pnpm run dev:worker
 ```
 
-### 生产部署
+## ☁️ 部署方法
+
+### 方式一：Cloudflare Workers（首选）
+
+项目入口和绑定由 [`wrangler.toml`](./wrangler.toml) 管理：Worker 入口是 `src/backend/worker.ts`，前端由 `dist/` 的 `ASSETS` binding 提供，默认配置后端为 `OPENLIST_KV`。
+
+#### 手动部署
+
+第一次部署到自己的 Cloudflare 账号时，先创建自己的 KV namespace，并把命令输出的 ID 写入 `wrangler.toml`：
 
 ```bash
-# 一键部署（前端构建 + 后端部署到 Cloudflare Workers）
-npm run deploy
+pnpm exec wrangler login
+pnpm exec wrangler kv namespace create OPENLIST_KV
+
+# 将上一步返回的 ID 写入 wrangler.toml 的 [[kv_namespaces]] / id
+pnpm exec wrangler secret put ADMIN_PASSWORD
+pnpm exec wrangler secret put JWT_SECRET
+
+pnpm run build
+pnpm run deploy:worker
 ```
 
-## 文档
+`ADMIN_PASSWORD` 未配置时，首次启动会生成随机初始密码并只在启动日志中打印一次。`JWT_SECRET` 建议显式配置，否则会依赖 KV 或当前进程保存随机密钥。
 
-- 📘 [官方文档](https://doc.oplist.org)
-- 🌏 [中国镜像](https://doc.oplist.org.cn)
-- ⚖️ [使用条款](https://doc.oplist.org/terms)
-- 🔒 [隐私政策](https://doc.oplist.org/privacy)
+`ADMIN_API_TOKEN` 是给 CI 或维护脚本使用的独立管理员 API token，可选但推荐配置：
 
-## Demo
+```bash
+pnpm exec wrangler secret put ADMIN_API_TOKEN
+```
 
-- 🌎 [全球 Demo](https://demo.oplist.org)
-- 🇨🇳 [中国 Demo](https://demo.oplist.org.cn)
+> ⚠️ **注意 KV ID**：仓库当前 `wrangler.toml` 中已有维护者账号的 `OPENLIST_KV` ID。部署到其他账号时必须替换为自己的 namespace ID，不要直接复用该值。
 
-## 讨论
+#### 一键部署
 
-如有一般性问题请前往 [_Discussions_](https://github.com/OpenListTeam/OpenList/discussions) 讨论区，**_Issues_ 仅用于错误报告和功能请求。**
+```bash
+pnpm run deploy
+```
 
-## 许可证
+该脚本会检查或创建名为 `OPENLIST_KV` 的 namespace，获取官方前端并执行 `wrangler deploy`。`pnpm run deploy:worker` 只负责部署已有的 `dist/`，不会替你构建前端。
 
-`OpenList` 是基于 [AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.txt) 许可证的开源软件。
+#### GitHub Actions 自动部署
 
-## 免责声明
+`.github/workflows/deploy-worker.yml` 会在 `main` 更新或手动触发时执行：安装依赖 → 运行后端测试 → 构建 → 部署 Worker → 检查 `/api/health` 和 `/api/healthz` → 安装 115 Open 修复插件并执行一次存量修复。
 
-- 本项目为免费开源软件，旨在通过网盘便捷分享文件，主要用于 Go 语言的下载与学习。
-- 使用本软件时请遵守相关法律法规，严禁任何形式的滥用。
-- 本软件基于官方 SDK 或 API 实现，未对其行为进行任何修改、破坏或干扰。
-- 仅进行 HTTP 302 跳转或流量转发，不拦截、存储或篡改任何用户数据。
-- 本项目与任何官方平台或服务提供商无关。
-- 本软件按“原样”提供，不附带任何明示或暗示的担保，包括但不限于适销性或特定用途的适用性。
-- 维护者不对因使用或无法使用本软件而导致的任何直接或间接损失负责。
-- 您需自行承担使用本软件的所有风险，包括但不限于账号被封、下载限速等。
-- 本项目遵循 [AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.txt) 许可证，详情请参见 [LICENSE](./LICENSE) 文件。
+在 fork 的 GitHub Settings → Secrets and variables → Actions 中配置：
 
-## 联系我们
+| 名称                    | 类型     | 用途                                                       |
+| ----------------------- | -------- | ---------------------------------------------------------- |
+| `CLOUDFLARE_API_TOKEN`  | Secret   | Wrangler 部署权限                                          |
+| `CLOUDFLARE_ACCOUNT_ID` | Secret   | Cloudflare 账号 ID                                         |
+| `OPENLIST_ADMIN_TOKEN`  | Secret   | 随机生成的管理员 API token，不是登录密码，也不是 115 token |
+| `OPENLIST_BASE_URL`     | Variable | 部署后健康检查和 115 修复所使用的自己的站点地址            |
 
-- [@GitHub](https://github.com/OpenListTeam)
-- [Telegram 交流群](https://t.me/OpenListTeam)
-- [Telegram 频道](https://t.me/OpenListOfficial)
+`OPENLIST_BASE_URL` 应填写你自己的 Worker 域名；不要依赖工作流文件中的示例回退地址。
 
-## 贡献者
+### 方式二：腾讯云 EdgeOne Makers
 
-我们衷心感谢原项目 [AlistGo/alist](https://github.com/AlistGo/alist) 的作者 [Xhofe](https://github.com/Xhofe) 及所有其他贡献者。
+EdgeOne 使用根目录的 [`edgeone.json`](./edgeone.json)：Node.js `22.21.1`、安装命令 `pnpm install --no-frozen-lockfile`、构建命令 `pnpm run build`、静态输出目录 `dist/`。
 
-感谢这些优秀的人：
+1. 在 [EdgeOne Makers 控制台](https://console.edgeone.ai/makers) 导入 GitHub 仓库
+2. 确认构建设置读取 `edgeone.json`
+3. 在环境变量中设置 `ADMIN_PASSWORD`、`JWT_SECRET`
+4. 部署完成后从日志获取初始密码（如果没有设置 `ADMIN_PASSWORD`）
 
-[![Contributors](https://contrib.rocks/image?repo=OpenListTeam/OpenList-Worker)](https://github.com/OpenListTeam/OpenList-Worker/graphs/contributors)
+`cloud-functions/[[default]].js` 是 EdgeOne 扫描仓库时需要的已提交云函数产物，不能只保留源码而删除它。代码或前端变化后先运行 `pnpm run build`，再提交该产物；`.github/workflows/edgeone-artifact-guard.yml` 会在 push / PR 时检查它是否过期。定时刷新 token 的 `CRON_SECRET` 配置和安全说明见 [EdgeOne 详细指南](./docs/edgeone.md)。
+
+也可以使用 CLI：
+
+```bash
+npm install -g edgeone
+edgeone login
+edgeone makers deploy
+```
+
+### 方式三：阿里云 ESA
+
+ESA 使用 [`esa.jsonc`](./esa.jsonc)、[`esa-entry.ts`](./esa-entry.ts) 和构建产物 `dist/esa-entry.js`。在 ESA 控制台导入仓库并使用 `pnpm run build` 构建；按 ESA 控制台实际名称配置 KV namespace，并设置 `JWT_SECRET`。ESA 的 KV 适配、请求级缓存和 SPA 回退已经封装在 `esa-entry.ts` 中，不使用 Cloudflare 的 `wrangler.toml` 绑定方式。
+
+### 方式四：Vercel / AWS Serverless / Node
+
+仓库提供以下适配入口：
+
+- Vercel：`api/[...route].ts` + `vercel.json`
+- AWS Lambda：`handler.ts` + `serverless.yml`，可运行 `pnpm run sls:deploy`
+- Node：构建后端产物为 `dist-server/api/[...route].js`
+
+```bash
+pnpm install --frozen-lockfile
+pnpm run build
+```
+
+这些入口不是 Cloudflare KV 的自动替代品。部署到 Vercel、Lambda 或普通 Node 容器时，需要自行配置静态 `dist/` 的托管方式和持久化后端；否则 `/healthz` 会显示 `mode: "memory"`，配置可能在实例重启后丢失。
+
+## 🔐 认证、存储与验证
+
+- 登录密码使用 `ADMIN_PASSWORD`；管理员脚本使用独立的 `ADMIN_API_TOKEN`
+- `JWT_SECRET` 不要提交到 Git；生产环境建议通过平台 Secret 配置
+- Cloudflare Workers 默认使用 `OPENLIST_KV` 保存用户、存储、设置和分享数据
+- 公开设置接口会过滤敏感字段；Worker 默认关闭匿名 guest 文件系统访问
+- 部署后优先检查：
+
+```bash
+curl -i https://<你的域名>/health
+curl -i https://<你的域名>/healthz
+```
+
+`/health` 是存活探针；`/healthz` 会实际检查配置和持久化状态，已配置的 KV 无法读取时返回 `503`。
+
+## 🧪 开发验证
+
+```bash
+pnpm run lint
+pnpm run test:189
+pnpm exec tsx --test $(find src/backend -name '*.test.ts' -print)
+```
+
+改动后端或前端构建链时，还应确认 `pnpm run build` 成功，并检查 `cloud-functions/[[default]].js` 是否与源码同步。
+
+## 📚 文档与社区
+
+- [官方文档](https://doc.oplist.org)
+- [中国镜像](https://doc.oplist.org.cn)
+- [Cloudflare Workers 部署指南](./docs/deploy-cloudflare-workers.md)
+- [EdgeOne Makers 部署指南](./docs/edgeone.md)
+- [多数据库后端说明](./docs/database-backend-multi-support.md)
+- [GitHub Discussions](https://github.com/OpenListTeam/OpenList/discussions)
+- [OpenList Telegram 交流群](https://t.me/OpenListTeam)
+
+## 📄 许可证与免责声明
+
+本项目遵循 [AGPL-3.0](./LICENSE)。OpenList-Worker、OpenList 及其存储服务驱动不代表任何网盘、云平台或第三方服务商；使用时请遵守相关服务条款和当地法律法规。软件按“原样”提供，账号风控、限速、封禁以及第三方接口变更风险由使用者自行承担。

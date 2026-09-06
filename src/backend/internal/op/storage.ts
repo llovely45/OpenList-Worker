@@ -1372,10 +1372,21 @@ export async function getItem(
   if (!item.type) {
     item.type = calcFileType(item.name, item.is_dir)
   }
+  // Match the Go FsGet contract: a storage with web_proxy enabled uses the
+  // proxy endpoint; otherwise a driver-provided link is exposed through the
+  // redirect endpoint so the request still gets authenticated and signed by
+  // this Worker before returning 302. Drivers without a direct link (local,
+  // encrypted, etc.) must keep using the proxy endpoint as their fallback.
+  const hasDirectLink = Boolean(item.raw_url)
+  const proxyEnabled =
+    resolved.storage?.web_proxy === true ||
+    resolved.storage?.web_proxy === 1 ||
+    String(resolved.storage?.web_proxy || "").toLowerCase() === "true"
+  const downloadPrefix = hasDirectLink && !proxyEnabled ? "d" : "p"
   return {
     item,
     provider: driverName,
-    rawUrl: `/api/p${virtualPath.startsWith("/") ? "" : "/"}${virtualPath}`,
+    rawUrl: `/api/${downloadPrefix}${virtualPath.startsWith("/") ? "" : "/"}${virtualPath}`,
   }
 }
 

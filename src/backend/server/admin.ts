@@ -1253,7 +1253,9 @@ const driverConfigs: Record<string, any> = {
       name: "115Open",
       local_sort: true,
       only_local: false,
-      only_proxy: true,
+      // The official 115 Open driver returns a direct DownURL. Let the
+      // storage-level web_proxy setting choose between /d (302) and /p.
+      only_proxy: false,
       no_cache: false,
       no_upload: false,
       need_ms: false,
